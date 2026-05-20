@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RTM Estimate Prototype</title>
+    <link rel="stylesheet" href="./styles.css?v=brand-residential" />
+  </head>
+  <body>
+    <section id="loginScreen" class="login-screen">
+      <form id="loginForm" class="login-card">
+        <img class="login-logo" src="./assets/zaks-homes-cottages-logo.jpg" alt="Zak's Homes & Cottages" />
+        <div>
+          <p class="eyebrow">Secure workspace prototype</p>
+          <h1>Sign in to Build OS</h1>
+        </div>
+        <label>
+          User
+          <select id="loginUser">
+            <option value="chris">Chris Peters - Owner</option>
+            <option value="angela">Angela Kiedrowski - Sales</option>
+            <option value="office">Office Team - Office</option>
+            <option value="production">Production Team - Production</option>
+            <option value="accounting">Accounting Team - Accounting</option>
+          </select>
+        </label>
+        <label>
+          Password
+          <input id="loginPassword" type="password" placeholder="Use demo password: zaks" />
+        </label>
+        <p id="loginError" class="login-error"></p>
+        <button type="submit">Sign in</button>
+        <p class="helper-note">Prototype login only. Production security will need server-side accounts, passwords, and permissions.</p>
+      </form>
+    </section>
+    <div id="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <img class="brand-logo" src="./assets/zaks-homes-cottages-logo.jpg" alt="Zak's Homes & Cottages" />
+          <div>
+            <h1>Residential Estimating System</h1>
+            <p>RTM & Site Built</p>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="Main views">
+          <button class="nav-button active" data-view="crm">CRM</button>
+          <button class="nav-button" data-view="management" data-permission="management">Management</button>
+          <button class="nav-button" data-view="estimate">Estimate</button>
+          <button class="nav-button" data-view="output">Proposal</button>
+          <button class="nav-button" data-view="contract">Contract</button>
+          <button class="nav-button" data-view="tasks">Tasks</button>
+          <button class="nav-button" data-view="schedule">Schedule</button>
+          <button class="nav-button" data-view="selections">Project Info</button>
+          <button class="nav-button" data-view="allowances">Allowances</button>
+          <button class="nav-button" data-view="review">Review</button>
+        </nav>
+
+        <section class="panel project-panel">
+          <h2>Project</h2>
+          <label>
+            Project name
+            <input id="projectName" value="Sample RTM Estimate" />
+          </label>
+          <label>
+            Customer
+            <input id="customerName" value="New Customer" />
+          </label>
+          <label>
+            Type
+            <select id="projectType">
+              <option>RTM</option>
+              <option>Simple Home</option>
+              <option>Site-built</option>
+            </select>
+          </label>
+          <label>
+            Project level
+            <select id="projectLevel">
+              <option>Standard</option>
+              <option>Enhanced</option>
+              <option>Executive</option>
+            </select>
+          </label>
+          <div class="field-grid">
+            <label>
+              House sq ft
+              <input id="houseSqft" type="number" value="1400" min="0" />
+            </label>
+            <label>
+              Garage sq ft
+              <input id="garageSqft" type="number" value="0" min="0" />
+            </label>
+          </div>
+          <label>
+            Distance from Zak's
+            <input id="travelDistance" type="number" value="75" min="0" />
+          </label>
+          <div class="field-grid">
+            <label>
+              Town / city
+              <input id="destinationTown" value="" placeholder="e.g. Saskatoon" />
+            </label>
+            <label>
+              Province
+              <select id="destinationProvince">
+                <option>SK</option>
+                <option>AB</option>
+                <option>MB</option>
+              </select>
+            </label>
+          </div>
+          <button id="distanceLookupBtn" class="secondary" type="button">Estimate distance</button>
+          <p id="distanceLookupNote" class="helper-note"></p>
+        </section>
+
+        <section class="panel crm-contact-panel">
+          <h2>Contact Details</h2>
+          <label>
+            Phone
+            <input id="crmPhone" placeholder="Customer phone" />
+          </label>
+          <label>
+            Email
+            <input id="crmEmail" placeholder="Customer email" />
+          </label>
+          <label>
+            Lead source
+            <select id="crmLeadSource">
+              <option>Walk-in</option>
+              <option>Website</option>
+              <option>Referral</option>
+              <option>Repeat customer</option>
+              <option>Social media</option>
+              <option>Trade show</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label>
+            Salesperson
+            <select id="crmSalesperson">
+              <option>Chris Peters</option>
+              <option>Angela Kiedrowski</option>
+              <option>Will Buhler</option>
+              <option>Kelsie Funk</option>
+              <option>Dale Deptuck</option>
+              <option>Sam Milne</option>
+              <option>Chad Zacharias</option>
+            </select>
+          </label>
+          <label>
+            Models interested in
+            <textarea id="crmInterestedModels" rows="3" placeholder="Model names, sizes, or plan notes"></textarea>
+          </label>
+          <label>
+            Project address
+            <textarea id="crmProjectAddress" rows="3" placeholder="Site or delivery address"></textarea>
+          </label>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Prototype</p>
+            <h2 id="viewTitle">CRM Pipeline</h2>
+          </div>
+          <div class="topbar-actions">
+            <div class="user-chip">
+              <span id="activeUserName">Not signed in</span>
+              <small id="activeUserRole">No role</small>
+            </div>
+            <button id="resetBtn" class="secondary">Reset</button>
+            <button id="exportBtn">Export summary</button>
+            <button id="logoutBtn" class="secondary" type="button">Sign out</button>
+          </div>
+        </header>
+
+        <section id="managementView" class="view">
+          <div class="management-summary">
+            <button class="management-summary-card" type="button" data-management-breakdown="total"><span>Total leads</span><strong id="mgmtTotalLeads">0</strong></button>
+            <button class="management-summary-card" type="button" data-management-breakdown="open"><span>Open pipeline</span><strong id="mgmtOpenLeads">0</strong></button>
+            <button class="management-summary-card" type="button" data-management-breakdown="won"><span>Won jobs</span><strong id="mgmtWonLeads">0</strong></button>
+            <button class="management-summary-card" type="button" data-management-breakdown="pipeline"><span>Pipeline value</span><strong id="mgmtPipelineValue">$0</strong></button>
+          </div>
+          <div class="management-grid">
+            <section class="management-card">
+              <h3>Sales Department</h3>
+              <div id="mgmtSalesStats" class="management-stat-list"></div>
+            </section>
+            <section class="management-card">
+              <h3>Individual Salespeople</h3>
+              <div id="mgmtSalespeopleStats" class="management-table-wrap"></div>
+            </section>
+          </div>
+          <section class="management-card">
+            <h3>Key Metrics</h3>
+            <div id="mgmtKeyMetrics" class="management-metrics"></div>
+          </section>
+        </section>
+
+        <section id="estimateView" class="view">
+          <div class="estimate-layout">
+            <section class="estimate-table-wrap">
+              <div class="section-toolbar">
+                <label>
+                  Search line items
+                  <input id="searchInput" placeholder="Search by section, description, code..." />
+                </label>
+                <label>
+                  Section
+                  <select id="sectionFilter">
+                    <option value="All">All sections</option>
+                  </select>
+                </label>
+              </div>
+              <div id="sectionsList" class="sections-list"></div>
+            </section>
+
+            <aside class="totals-panel">
+              <h3>Estimate Totals</h3>
+              <dl class="totals">
+                <div><dt>Cost</dt><dd id="totalCost">$0</dd></div>
+                <div><dt>Retail before tax</dt><dd id="totalRetail">$0</dd></div>
+                <div><dt>PST</dt><dd id="totalPst">$0</dd></div>
+                <div><dt>GST</dt><dd id="totalGst">$0</dd></div>
+                <div class="grand"><dt>Total</dt><dd id="grandTotal">$0</dd></div>
+                <div><dt>Margin</dt><dd id="marginPct">0%</dd></div>
+                <div><dt>Price per sq ft</dt><dd id="priceSqft">$0</dd></div>
+              </dl>
+              <div class="rate-box">
+                <label>
+                  Target margin
+                  <input id="targetMargin" type="number" value="18" min="0" max="80" />
+                </label>
+                <label>
+                  PST %
+                  <input id="pstRate" type="number" value="6" min="0" step="0.1" />
+                </label>
+                <label>
+                  GST %
+                  <input id="gstRate" type="number" value="5" min="0" step="0.1" />
+                </label>
+              </div>
+              <section class="estimate-version-panel">
+                <h3>Estimate Versions</h3>
+                <label>
+                  Version note
+                  <input id="estimateVersionNote" placeholder="e.g. Initial quote, revised windows" />
+                </label>
+                <button id="saveEstimateVersionBtn" type="button">Save current version</button>
+                <p id="estimateVersionStatus" class="helper-note"></p>
+                <div id="estimateVersionsList" class="estimate-version-list"></div>
+              </section>
+            </aside>
+          </div>
+        </section>
+
+        <section id="outputView" class="view">
+          <div class="output-layout">
+            <aside class="output-tools">
+              <section class="crm-card">
+                <h3>Proposal Setup</h3>
+                <label>
+                  Estimate date
+                  <input id="outputEstimateDate" type="date" />
+                </label>
+                <label>
+                  Provided by
+                  <input id="outputProvidedBy" placeholder="Salesperson or estimator" />
+                </label>
+                <label>
+                  Location
+                  <input id="outputLocation" placeholder="Town, province" />
+                </label>
+                <label>
+                  Intro description
+                  <textarea id="outputIntro" rows="5"></textarea>
+                </label>
+                <label>
+                  Moving notes
+                  <textarea id="outputMovingNotes" rows="4"></textarea>
+                </label>
+                <label>
+                  Exclusions
+                  <textarea id="outputExclusions" rows="8"></textarea>
+                </label>
+                <button id="printOutputBtn" type="button">Print / save PDF</button>
+              </section>
+              <section class="crm-card">
+                <h3>Customer Wording</h3>
+                <div id="outputLineEditor" class="output-line-editor"></div>
+              </section>
+            </aside>
+            <section class="proposal-preview-stack" id="proposalPreview"></section>
+          </div>
+        </section>
+
+        <section id="contractView" class="view">
+          <div class="contract-layout">
+            <aside class="contract-tools">
+              <section class="crm-card">
+                <h3>Contract Setup</h3>
+                <label>
+                  Contract date
+                  <input id="contractDate" type="date" />
+                </label>
+                <label>
+                  Contract amount source
+                  <select id="contractEstimateVersion"></select>
+                </label>
+                <label>
+                  Customer legal name
+                  <input id="contractCustomerName" placeholder="Customer name for contract" />
+                </label>
+                <label>
+                  Project location
+                  <input id="contractLocation" placeholder="Project address / town" />
+                </label>
+                <label>
+                  Deposit terms
+                  <textarea id="contractDepositTerms" rows="3"></textarea>
+                </label>
+                <button id="printContractBtn" type="button">Print / save PDF</button>
+              </section>
+              <section class="crm-card">
+                <h3>Included In Contract</h3>
+                <div id="contractInclusions" class="contract-checklist"></div>
+              </section>
+              <section class="crm-card">
+                <h3>Not Included</h3>
+                <div id="contractExclusions" class="contract-checklist"></div>
+              </section>
+            </aside>
+            <section class="proposal-preview-stack" id="contractPreview"></section>
+          </div>
+        </section>
+
+        <section id="crmView" class="view active">
+          <div class="crm-layout">
+            <section class="crm-main">
+              <div class="crm-toolbar">
+                <label>
+                  CRM record
+                  <select id="crmRecordSelect"></select>
+                </label>
+                <label>
+                  Lead status
+                  <select id="crmStatus">
+                    <option>New</option>
+                    <option>Contacted</option>
+                    <option selected>Needs Estimate</option>
+                    <option>Estimate In Progress</option>
+                    <option>Quote Sent</option>
+                    <option>Follow-up</option>
+                    <option>Won</option>
+                    <option>Lost</option>
+                  </select>
+                </label>
+                <label>
+                  Assigned to
+                  <input id="crmOwner" value="Sales" />
+                </label>
+                <label>
+                  Next follow-up
+                  <input id="crmFollowupDate" type="date" />
+                </label>
+                <div class="crm-actions">
+                  <button id="newLeadBtn" class="secondary" type="button">New lead</button>
+                  <button id="saveLeadBtn" type="button">Save lead</button>
+                  <button id="startEstimateBtn" type="button">Start estimate</button>
+                </div>
+              </div>
+
+              <div class="board" id="crmBoard">
+                <div class="lane" data-crm-lane="New"><h3>New</h3><div class="lane-items"></div></div>
+                <div class="lane" data-crm-lane="Contacted"><h3>Contacted</h3><div class="lane-items"></div></div>
+                <div class="lane" data-crm-lane="Needs Estimate"><h3>Needs Estimate</h3><div class="lane-items"></div></div>
+                <div class="lane" data-crm-lane="Quote Sent"><h3>Quote Sent</h3><div class="lane-items"></div></div>
+                <div class="lane" data-crm-lane="Won"><h3>Won</h3><div class="lane-items"></div></div>
+              </div>
+
+              <section class="crm-card customer-snapshot-card">
+                <div class="snapshot-identity">
+                  <div>
+                    <span>Customer</span>
+                    <strong id="crmCustomerName">New Customer</strong>
+                  </div>
+                  <div>
+                    <span>Project</span>
+                    <strong id="crmProjectName">Sample RTM Estimate</strong>
+                  </div>
+                </div>
+                <div class="snapshot-metrics">
+                  <div>
+                    <span>Type</span>
+                    <strong id="crmProjectType">RTM</strong>
+                  </div>
+                  <div>
+                    <span>Level</span>
+                    <strong id="crmProjectLevel">Standard</strong>
+                  </div>
+                  <div class="snapshot-total">
+                    <span>Estimate total</span>
+                    <strong id="crmEstimateTotal">$0</strong>
+                  </div>
+                </div>
+              </section>
+
+              <section class="crm-card">
+                <div class="crm-card-head">
+                  <h3>Tasks</h3>
+                  <button id="addTaskBtn" class="secondary" type="button">Add task</button>
+                </div>
+                <div id="crmTasks" class="task-list"></div>
+              </section>
+
+              <section class="crm-card">
+                <h3>Notes</h3>
+                <textarea id="crmNoteInput" rows="4" placeholder="Add a call note, customer preference, or next step"></textarea>
+                <button id="addNoteBtn" type="button">Add note</button>
+                <div id="crmNotes" class="note-list"></div>
+              </section>
+            </section>
+          </div>
+        </section>
+
+        <section id="scheduleView" class="view">
+          <div class="schedule-layout">
+            <section class="schedule-panel">
+              <div class="schedule-toolbar">
+                <label>
+                  Schedule start
+                  <input id="scheduleStartDate" type="date" />
+                </label>
+                <label>
+                  Schedule owner
+                  <input id="scheduleOwner" value="Production" />
+                </label>
+                <label>
+                  Calendar view
+                  <select id="scheduleScope">
+                    <option value="current">Current project</option>
+                    <option value="all">All saved projects</option>
+                  </select>
+                </label>
+                <label>
+                  Trade calendar
+                  <select id="scheduleTradeFilter"></select>
+                </label>
+                <button id="applyScheduleTemplateBtn" class="secondary" type="button">Apply template</button>
+              </div>
+              <section class="schedule-calendar-card">
+                <div class="calendar-head">
+                  <button id="schedulePrevMonthBtn" class="secondary icon-button" type="button" title="Previous month">‹</button>
+                  <div>
+                    <h3 id="scheduleCalendarTitle">Month</h3>
+                    <p id="scheduleCalendarSubtitle">Click a day or milestone to edit the schedule.</p>
+                  </div>
+                  <button id="scheduleTodayBtn" class="secondary" type="button">Today</button>
+                  <button id="scheduleNextMonthBtn" class="secondary icon-button" type="button" title="Next month">›</button>
+                </div>
+                <div class="calendar-weekdays">
+                  <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                </div>
+                <div id="scheduleCalendar" class="schedule-calendar"></div>
+              </section>
+              <div class="schedule-table-wrap">
+                <table class="schedule-table">
+                  <thead>
+                    <tr>
+                      <th>Milestone</th>
+                      <th>Department</th>
+                      <th>Trade</th>
+                      <th>Subtrade</th>
+                      <th>Target date</th>
+                      <th>Status</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody id="scheduleBody"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <aside class="schedule-side">
+              <section id="scheduleEditor" class="crm-card schedule-editor-modal">
+                <div class="crm-card-head">
+                  <h3>Selected Schedule Item</h3>
+                  <button id="closeScheduleEditorBtn" class="secondary icon-button" type="button" title="Close editor">x</button>
+                </div>
+                <div class="crm-form">
+                  <label>
+                    Project
+                    <input id="scheduleEditProjectName" list="scheduleProjectOptions" placeholder="Start typing a project name" />
+                    <datalist id="scheduleProjectOptions"></datalist>
+                  </label>
+                  <label>
+                    Milestone
+                    <input id="scheduleEditName" />
+                  </label>
+                  <label>
+                    Department
+                    <select id="scheduleEditDepartment">
+                      <option>Sales</option>
+                      <option>Office</option>
+                      <option>Production</option>
+                      <option>Owners</option>
+                      <option>Accounting</option>
+                    </select>
+                  </label>
+                  <label>
+                    Trade
+                    <select id="scheduleEditTrade"></select>
+                  </label>
+                  <label>
+                    Subtrade
+                    <input id="scheduleEditSubtrade" placeholder="Crew or company name" />
+                  </label>
+                  <label>
+                    Target date
+                    <input id="scheduleEditDate" type="date" />
+                  </label>
+                  <label>
+                    Status
+                    <select id="scheduleEditStatus">
+                      <option>Not started</option>
+                      <option>In progress</option>
+                      <option>Waiting</option>
+                      <option>Complete</option>
+                    </select>
+                  </label>
+                  <label>
+                    Notes
+                    <textarea id="scheduleEditNotes" rows="3" placeholder="Schedule notes"></textarea>
+                  </label>
+                  <div class="schedule-editor-actions">
+                    <button id="addScheduleItemBtn" class="secondary" type="button">Add item on selected day</button>
+                    <button id="deleteScheduleItemBtn" class="danger-button" type="button">Delete event</button>
+                  </div>
+                </div>
+              </section>
+              <section id="scheduleDayPopup" class="crm-card schedule-editor-modal day-event-modal">
+                <div class="crm-card-head">
+                  <h3 id="scheduleDayPopupTitle">Day Schedule</h3>
+                  <button id="closeScheduleDayPopupBtn" class="secondary icon-button" type="button" title="Close day list">x</button>
+                </div>
+                <div id="scheduleDayPopupItems" class="day-event-list"></div>
+              </section>
+            </aside>
+          </div>
+        </section>
+
+        <section id="tasksView" class="view">
+          <div class="project-task-layout">
+            <section class="project-task-main">
+              <div class="project-task-summary">
+                <button class="project-task-summary-card" type="button" data-task-breakdown="total"><span>Total tasks</span><strong id="projectTaskTotal">0</strong></button>
+                <button class="project-task-summary-card" type="button" data-task-breakdown="open"><span>Open</span><strong id="projectTaskOpen">0</strong></button>
+                <button class="project-task-summary-card" type="button" data-task-breakdown="dueSoon"><span>Due soon</span><strong id="projectTaskDueSoon">0</strong></button>
+                <button class="project-task-summary-card" type="button" data-task-breakdown="complete"><span>Complete</span><strong id="projectTaskComplete">0</strong></button>
+              </div>
+              <section class="crm-card project-task-form">
+                <h3>Add Project Task</h3>
+                <div class="project-task-form-grid">
+                  <label>
+                    Project
+                    <select id="projectTaskProjectSelect"></select>
+                  </label>
+                  <label>
+                    Task
+                    <input id="projectTaskText" placeholder="Task or follow-up" />
+                  </label>
+                  <label>
+                    Owner
+                    <select id="projectTaskOwner">
+                      <option>Sales</option>
+                      <option>Office</option>
+                      <option>Production</option>
+                      <option>Owners</option>
+                      <option>Accounting</option>
+                    </select>
+                  </label>
+                  <label>
+                    Due date
+                    <input id="projectTaskDueDate" type="date" />
+                  </label>
+                  <label>
+                    Priority
+                    <select id="projectTaskPriority">
+                      <option>Normal</option>
+                      <option>High</option>
+                      <option>Low</option>
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  Notes
+                  <textarea id="projectTaskNotes" rows="3" placeholder="Optional task details"></textarea>
+                </label>
+                <button id="addProjectTaskBtn" type="button">Add task</button>
+              </section>
+              <section class="project-task-table-wrap">
+                <div class="project-task-table-toolbar">
+                  <label>
+                    Task list project
+                    <select id="projectTaskListProjectSelect"></select>
+                  </label>
+                  <label>
+                    Owner
+                    <select id="projectTaskOwnerFilter">
+                      <option>All owners</option>
+                      <option>Sales</option>
+                      <option>Office</option>
+                      <option>Production</option>
+                      <option>Owners</option>
+                      <option>Accounting</option>
+                    </select>
+                  </label>
+                  <label>
+                    Sort by
+                    <select id="projectTaskSort">
+                      <option value="due">Due date</option>
+                      <option value="owner">Owner</option>
+                      <option value="project">Project</option>
+                      <option value="priority">Priority</option>
+                    </select>
+                  </label>
+                </div>
+                <table class="project-task-table">
+                  <thead>
+                    <tr>
+                      <th>Done</th>
+                      <th>Project</th>
+                      <th>Task</th>
+                      <th>Owner</th>
+                      <th>Due</th>
+                      <th>Priority</th>
+                      <th>Status</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody id="projectTasksBody"></tbody>
+                </table>
+              </section>
+            </section>
+          </div>
+        </section>
+
+        <section id="selectionsView" class="view">
+          <div class="selection-summary">
+            <div><span>Total selections</span><strong id="selectionTotal">0</strong></div>
+            <div><span>Needed</span><strong id="selectionNeeded">0</strong></div>
+            <div><span>Selected</span><strong id="selectionSelected">0</strong></div>
+            <div><span>Approved</span><strong id="selectionApproved">0</strong></div>
+          </div>
+          <div class="selection-workbench">
+            <aside class="selection-category-rail" id="selectionCategoryTabs" aria-label="Selection categories"></aside>
+            <section class="selection-form-panel">
+              <div class="selection-form-head" id="selectionFormHeader"></div>
+              <div class="selection-form-grid" id="selectionFormFields"></div>
+            </section>
+          </div>
+          <div class="section-toolbar">
+            <label>
+              Search selections
+              <input id="selectionSearch" placeholder="Search category, item, selection, notes..." />
+            </label>
+            <label>
+              Category
+              <select id="selectionCategoryFilter">
+                <option>All categories</option>
+              </select>
+            </label>
+          </div>
+          <div class="selection-table-wrap">
+            <table class="selection-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Item</th>
+                  <th>Selection</th>
+                  <th>Status</th>
+                  <th>Assigned to</th>
+                  <th>Due date</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="selectionsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="allowancesView" class="view">
+          <div class="allowance-summary">
+            <div><span>Total allowances</span><strong id="allowanceTotal">$0</strong></div>
+            <div><span>Actual selections</span><strong id="allowanceActualTotal">$0</strong></div>
+            <div><span>Over / under</span><strong id="allowanceVarianceTotal">$0</strong></div>
+          </div>
+          <div class="allowance-table-wrap">
+            <table class="allowance-table">
+              <thead>
+                <tr>
+                  <th>Section</th>
+                  <th>Allowance</th>
+                  <th>Estimated</th>
+                  <th>Actual selection</th>
+                  <th>Over / under</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="allowancesBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="reviewView" class="view">
+          <div class="review-grid">
+            <section>
+              <h3>Project Totals</h3>
+              <div id="reviewTotals" class="review-list"></div>
+            </section>
+            <section>
+              <h3>Section Summary</h3>
+              <div id="reviewSections" class="review-list"></div>
+            </section>
+            <section>
+              <h3>Items To Review</h3>
+              <div id="reviewWarnings" class="review-list"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <section id="estimateVersionModal" class="document-modal" hidden>
+      <div class="document-modal-backdrop" data-close-estimate-version></div>
+      <div class="document-modal-shell">
+        <div class="document-modal-toolbar">
+          <div>
+            <span>Saved estimate version</span>
+            <strong id="estimateVersionModalTitle">Version</strong>
+          </div>
+          <button id="closeEstimateVersionBtn" class="secondary" type="button">Close</button>
+        </div>
+        <div id="estimateVersionDocument" class="estimate-version-document"></div>
+      </div>
+    </section>
+
+    <section id="managementBreakdownModal" class="document-modal" hidden>
+      <div class="document-modal-backdrop" data-close-management-breakdown></div>
+      <div class="management-breakdown-shell">
+        <div class="document-modal-toolbar">
+          <div>
+            <span>Management breakdown</span>
+            <strong id="managementBreakdownTitle">Projects</strong>
+          </div>
+          <button id="closeManagementBreakdownBtn" class="secondary" type="button">Close</button>
+        </div>
+        <div id="managementBreakdownBody" class="management-breakdown-body"></div>
+      </div>
+    </section>
+
+    <section id="taskBreakdownModal" class="document-modal" hidden>
+      <div class="document-modal-backdrop" data-close-task-breakdown></div>
+      <div class="management-breakdown-shell">
+        <div class="document-modal-toolbar">
+          <div>
+            <span>Task breakdown</span>
+            <strong id="taskBreakdownTitle">Tasks</strong>
+          </div>
+          <button id="closeTaskBreakdownBtn" class="secondary" type="button">Close</button>
+        </div>
+        <div id="taskBreakdownBody" class="management-breakdown-body"></div>
+      </div>
+    </section>
+
+    <script src="./app.js?v=contract-tab"></script>
+  </body>
+</html>
