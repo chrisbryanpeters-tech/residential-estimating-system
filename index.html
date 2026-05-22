@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RTM Estimate Prototype</title>
-    <link rel="stylesheet" href="./styles.css?v=brand-residential" />
+    <link rel="stylesheet" href="./styles.css?v=crm-six-lanes" />
   </head>
   <body>
     <section id="loginScreen" class="login-screen">
@@ -44,16 +44,37 @@
         </div>
 
         <nav class="nav" aria-label="Main views">
+          <button class="nav-button" data-view="tasks">To-Dos</button>
           <button class="nav-button active" data-view="crm">CRM</button>
           <button class="nav-button" data-view="management" data-permission="management">Management</button>
-          <button class="nav-button" data-view="estimate">Estimate</button>
-          <button class="nav-button" data-view="output">Proposal</button>
-          <button class="nav-button" data-view="contract">Contract</button>
-          <button class="nav-button" data-view="tasks">Tasks</button>
-          <button class="nav-button" data-view="schedule">Schedule</button>
-          <button class="nav-button" data-view="selections">Project Info</button>
-          <button class="nav-button" data-view="allowances">Allowances</button>
-          <button class="nav-button" data-view="review">Review</button>
+          <div class="nav-group" data-nav-group="sales">
+            <button class="nav-group-toggle" type="button" data-nav-group-toggle="sales" aria-expanded="true">Sales</button>
+            <div class="nav-subnav">
+              <button class="nav-button" data-view="estimate">Estimate</button>
+              <button class="nav-button" data-view="output">Proposal</button>
+              <button class="nav-button" data-view="contract">Contract</button>
+              <button class="nav-button" data-view="review">Review</button>
+            </div>
+          </div>
+          <div class="nav-group" data-nav-group="projectManagement">
+            <button class="nav-group-toggle" type="button" data-nav-group-toggle="projectManagement" aria-expanded="true">Project Management</button>
+            <div class="nav-subnav">
+              <button class="nav-button" data-view="schedule">Schedule</button>
+              <button class="nav-button" data-view="selections">Project Info</button>
+              <button class="nav-button" data-view="vendors">Vendor/Subtrade Management</button>
+              <button class="nav-button" data-view="jobFiles">Files & Photos</button>
+              <button class="nav-button" data-view="warranty">Warranty</button>
+            </div>
+          </div>
+          <div class="nav-group" data-nav-group="financial">
+            <button class="nav-group-toggle" type="button" data-nav-group-toggle="financial" aria-expanded="true">Financial</button>
+            <div class="nav-subnav">
+              <button class="nav-button" data-view="billingStages">Billing Stages</button>
+              <button class="nav-button" data-view="purchaseOrders">Purchase Orders</button>
+              <button class="nav-button" data-view="changeOrders">Change Orders</button>
+              <button class="nav-button" data-view="allowances">Allowances</button>
+            </div>
+          </div>
         </nav>
 
         <section class="panel project-panel">
@@ -262,6 +283,10 @@
               <section class="crm-card">
                 <h3>Proposal Setup</h3>
                 <label>
+                  Estimate source
+                  <select id="outputEstimateVersion"></select>
+                </label>
+                <label>
                   Estimate date
                   <input id="outputEstimateDate" type="date" />
                 </label>
@@ -321,7 +346,17 @@
                   Deposit terms
                   <textarea id="contractDepositTerms" rows="3"></textarea>
                 </label>
+                <div id="contractApprovalStatus" class="contract-approval-status"></div>
+                <label>
+                  Approval note
+                  <textarea id="contractApprovalNote" rows="3" placeholder="Internal review note"></textarea>
+                </label>
+                <div class="contract-approval-actions">
+                  <button id="approveContractBtn" class="secondary" type="button">Approve contract</button>
+                  <button id="revokeContractApprovalBtn" class="danger-button" type="button">Revoke approval</button>
+                </div>
                 <button id="printContractBtn" type="button">Print / save PDF</button>
+                <p id="contractApprovalMessage" class="helper-note"></p>
               </section>
               <section class="crm-card">
                 <h3>Included In Contract</h3>
@@ -339,6 +374,23 @@
         <section id="crmView" class="view active">
           <div class="crm-layout">
             <section class="crm-main">
+              <section class="crm-active-record-card">
+                <div>
+                  <p class="eyebrow">Currently editing</p>
+                  <h3 id="crmActiveRecordTitle">Sample RTM Estimate</h3>
+                </div>
+                <div class="crm-active-fields">
+                  <label>
+                    Lead title
+                    <input id="crmLeadTitle" value="Sample RTM Estimate" />
+                  </label>
+                  <label>
+                    Customer name
+                    <input id="crmCustomerNameInput" value="New Customer" />
+                  </label>
+                </div>
+              </section>
+
               <div class="crm-toolbar">
                 <label>
                   CRM record
@@ -354,6 +406,7 @@
                     <option>Quote Sent</option>
                     <option>Follow-up</option>
                     <option>Won</option>
+                    <option>Under Construction</option>
                     <option>Lost</option>
                   </select>
                 </label>
@@ -378,6 +431,7 @@
                 <div class="lane" data-crm-lane="Needs Estimate"><h3>Needs Estimate</h3><div class="lane-items"></div></div>
                 <div class="lane" data-crm-lane="Quote Sent"><h3>Quote Sent</h3><div class="lane-items"></div></div>
                 <div class="lane" data-crm-lane="Won"><h3>Won</h3><div class="lane-items"></div></div>
+                <div class="lane" data-crm-lane="Under Construction"><h3>Under Construction</h3><div class="lane-items"></div></div>
               </div>
 
               <section class="crm-card customer-snapshot-card">
@@ -409,7 +463,7 @@
 
               <section class="crm-card">
                 <div class="crm-card-head">
-                  <h3>Tasks</h3>
+                  <h3>To-Dos</h3>
                   <button id="addTaskBtn" class="secondary" type="button">Add task</button>
                 </div>
                 <div id="crmTasks" class="task-list"></div>
@@ -472,8 +526,9 @@
                       <th>Milestone</th>
                       <th>Department</th>
                       <th>Trade</th>
-                      <th>Subtrade</th>
-                      <th>Target date</th>
+                      <th>Company</th>
+                      <th>Start date</th>
+                      <th>End date</th>
                       <th>Status</th>
                       <th>Notes</th>
                     </tr>
@@ -514,12 +569,16 @@
                     <select id="scheduleEditTrade"></select>
                   </label>
                   <label>
-                    Subtrade
-                    <input id="scheduleEditSubtrade" placeholder="Crew or company name" />
+                    Company
+                    <input id="scheduleEditSubtrade" placeholder="Subtrade company name" />
                   </label>
                   <label>
-                    Target date
+                    Start date
                     <input id="scheduleEditDate" type="date" />
+                  </label>
+                  <label>
+                    End date
+                    <input id="scheduleEditEndDate" type="date" />
                   </label>
                   <label>
                     Status
@@ -555,13 +614,13 @@
           <div class="project-task-layout">
             <section class="project-task-main">
               <div class="project-task-summary">
-                <button class="project-task-summary-card" type="button" data-task-breakdown="total"><span>Total tasks</span><strong id="projectTaskTotal">0</strong></button>
+                <button class="project-task-summary-card" type="button" data-task-breakdown="total"><span>Total to-dos</span><strong id="projectTaskTotal">0</strong></button>
                 <button class="project-task-summary-card" type="button" data-task-breakdown="open"><span>Open</span><strong id="projectTaskOpen">0</strong></button>
                 <button class="project-task-summary-card" type="button" data-task-breakdown="dueSoon"><span>Due soon</span><strong id="projectTaskDueSoon">0</strong></button>
                 <button class="project-task-summary-card" type="button" data-task-breakdown="complete"><span>Complete</span><strong id="projectTaskComplete">0</strong></button>
               </div>
               <section class="crm-card project-task-form">
-                <h3>Add Project Task</h3>
+                <h3>Add To-Do</h3>
                 <div class="project-task-form-grid">
                   <label>
                     Project
@@ -593,6 +652,15 @@
                       <option>Low</option>
                     </select>
                   </label>
+                  <label>
+                    Status
+                    <select id="projectTaskStatus">
+                      <option>Open</option>
+                      <option>In Progress</option>
+                      <option>Waiting</option>
+                      <option>Complete</option>
+                    </select>
+                  </label>
                 </div>
                 <label>
                   Notes
@@ -603,7 +671,7 @@
               <section class="project-task-table-wrap">
                 <div class="project-task-table-toolbar">
                   <label>
-                    Task list project
+                    To-do list project
                     <select id="projectTaskListProjectSelect"></select>
                   </label>
                   <label>
@@ -683,6 +751,7 @@
                   <th>Status</th>
                   <th>Assigned to</th>
                   <th>Due date</th>
+                  <th>Photo</th>
                   <th>Notes</th>
                 </tr>
               </thead>
@@ -713,6 +782,333 @@
               <tbody id="allowancesBody"></tbody>
             </table>
           </div>
+        </section>
+
+        <section id="billingStagesView" class="view">
+          <div class="order-summary">
+            <div><span>Billing stages</span><strong id="billingStageCount">0</strong></div>
+            <div><span>Stage amounts</span><strong id="billingStageAmountTotal">$0</strong></div>
+            <div><span>Paid / invoiced</span><strong id="billingStagePaidTotal">$0</strong></div>
+          </div>
+          <section class="crm-card billing-stage-card">
+            <div class="crm-card-head">
+              <h3>Billing Stages</h3>
+              <span id="crmBillingStageSummary" class="billing-stage-summary">0 complete</span>
+            </div>
+            <div id="crmBillingStages" class="billing-stage-groups"></div>
+          </section>
+        </section>
+
+        <section id="jobFilesView" class="view">
+          <div class="order-summary">
+            <div><span>Files</span><strong id="jobFileCount">0</strong></div>
+            <div><span>Photos</span><strong id="jobPhotoCount">0</strong></div>
+            <div><span>Total size</span><strong id="jobFileTotalSize">0 KB</strong></div>
+          </div>
+          <section class="crm-card file-upload-card">
+            <h3>Upload Job Files</h3>
+            <label>
+              Attach to job
+              <select id="jobFileProject"></select>
+            </label>
+            <label>
+              Photos or files
+              <input id="jobFileInput" type="file" multiple />
+            </label>
+            <label>
+              Description
+              <textarea id="jobFileDescription" rows="3" placeholder="What are these files for?"></textarea>
+            </label>
+            <button id="addJobFilesBtn" type="button">Add files</button>
+            <p id="jobFileUploadNote" class="helper-note"></p>
+          </section>
+          <div class="job-file-toolbar">
+            <label>
+              Show files for
+              <select id="jobFileProjectFilter"></select>
+            </label>
+          </div>
+          <div id="jobFilesList" class="job-files-list"></div>
+        </section>
+
+        <section id="vendorsView" class="view">
+          <div class="order-summary">
+            <div><span>Total companies</span><strong id="vendorCount">0</strong></div>
+            <div><span>Subtrades</span><strong id="subtradeCount">0</strong></div>
+            <div><span>Vendors</span><strong id="materialVendorCount">0</strong></div>
+          </div>
+          <section class="crm-card order-form">
+            <h3>Add / Edit Vendor or Subtrade</h3>
+            <div class="vendor-form-grid">
+              <label>
+                Company
+                <input id="vendorCompany" placeholder="Company name" />
+              </label>
+              <label>
+                Type
+                <select id="vendorType">
+                  <option>Subtrade</option>
+                  <option>Vendor</option>
+                  <option>Supplier</option>
+                  <option>Service</option>
+                </select>
+              </label>
+              <label>
+                Trade / category
+                <select id="vendorTrade"></select>
+              </label>
+              <label>
+                Contact
+                <input id="vendorContact" placeholder="Main contact" />
+              </label>
+            </div>
+            <div class="vendor-form-grid">
+              <label>
+                Phone
+                <input id="vendorPhone" placeholder="Phone" />
+              </label>
+              <label>
+                Email
+                <input id="vendorEmail" placeholder="Email" />
+              </label>
+              <label>
+                Status
+                <select id="vendorStatus">
+                  <option>Active</option>
+                  <option>Preferred</option>
+                  <option>Backup</option>
+                  <option>Inactive</option>
+                </select>
+              </label>
+              <label>
+                Notes
+                <input id="vendorNotes" placeholder="Notes, service area, rates" />
+              </label>
+            </div>
+            <button id="addVendorBtn" type="button">Add company</button>
+          </section>
+          <div class="section-toolbar">
+            <label>
+              Search companies
+              <input id="vendorSearch" placeholder="Search company, trade, contact, notes..." />
+            </label>
+            <label>
+              Trade
+              <select id="vendorTradeFilter"></select>
+            </label>
+          </div>
+          <div class="order-table-wrap">
+            <table class="order-table vendor-table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Type</th>
+                  <th>Trade / category</th>
+                  <th>Contact</th>
+                  <th>Phone</th>
+                  <th>Email</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="vendorsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="purchaseOrdersView" class="view">
+          <div class="order-summary">
+            <div><span>Purchase orders</span><strong id="purchaseOrderCount">0</strong></div>
+            <div><span>Open value</span><strong id="purchaseOrderOpenTotal">$0</strong></div>
+            <div><span>Issued value</span><strong id="purchaseOrderIssuedTotal">$0</strong></div>
+          </div>
+          <section class="crm-card order-form">
+            <h3>Add / Edit Purchase Order</h3>
+            <div class="order-form-grid">
+              <label>
+                Vendor / supplier
+                <input id="purchaseOrderVendor" placeholder="Company name" />
+              </label>
+              <label>
+                Trade / category
+                <select id="purchaseOrderTrade"></select>
+              </label>
+              <label>
+                Amount
+                <input id="purchaseOrderAmount" type="number" min="0" step="0.01" placeholder="0" />
+              </label>
+              <label>
+                Needed by
+                <input id="purchaseOrderNeededDate" type="date" />
+              </label>
+              <label>
+                Status
+                <select id="purchaseOrderStatus">
+                  <option>Draft</option>
+                  <option>Issued</option>
+                  <option>Received</option>
+                  <option>Closed</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              Notes
+              <textarea id="purchaseOrderNotes" rows="3" placeholder="PO details, materials, delivery notes"></textarea>
+            </label>
+            <button id="addPurchaseOrderBtn" type="button">Add purchase order</button>
+          </section>
+          <div class="order-table-wrap">
+            <table class="order-table">
+              <thead>
+                <tr>
+                  <th>PO #</th>
+                  <th>Vendor</th>
+                  <th>Trade</th>
+                  <th>Amount</th>
+                  <th>Needed</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="purchaseOrdersBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="changeOrdersView" class="view">
+          <div class="order-summary">
+            <div><span>Change orders</span><strong id="changeOrderCount">0</strong></div>
+            <div><span>Pending value</span><strong id="changeOrderPendingTotal">$0</strong></div>
+            <div><span>Approved value</span><strong id="changeOrderApprovedTotal">$0</strong></div>
+          </div>
+          <section class="crm-card order-form">
+            <h3>Add / Edit Change Order</h3>
+            <div class="order-form-grid">
+              <label>
+                Title
+                <input id="changeOrderTitle" placeholder="Scope change title" />
+              </label>
+              <label>
+                Requested by
+                <input id="changeOrderRequestedBy" placeholder="Customer, sales, production" />
+              </label>
+              <label>
+                Amount
+                <input id="changeOrderAmount" type="number" step="0.01" placeholder="0" />
+              </label>
+              <label>
+                Date
+                <input id="changeOrderDate" type="date" />
+              </label>
+              <label>
+                Status
+                <select id="changeOrderStatus">
+                  <option>Draft</option>
+                  <option>Sent</option>
+                  <option>Approved</option>
+                  <option>Rejected</option>
+                  <option>Invoiced</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              Description
+              <textarea id="changeOrderDescription" rows="3" placeholder="Describe the scope, pricing, and approval requirement"></textarea>
+            </label>
+            <button id="addChangeOrderBtn" type="button">Add change order</button>
+          </section>
+          <div class="order-table-wrap">
+            <table class="order-table">
+              <thead>
+                <tr>
+                  <th>CO #</th>
+                  <th>Title</th>
+                  <th>Requested by</th>
+                  <th>Amount</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody id="changeOrdersBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="warrantyView" class="view">
+          <div class="order-summary">
+            <div><span>Warranty projects</span><strong id="warrantyProjectCount">0</strong></div>
+            <div><span>Complete</span><strong id="warrantyCompleteCount">0</strong></div>
+            <div><span>Open deficiencies</span><strong id="warrantyOpenDeficiencyCount">0</strong></div>
+          </div>
+          <section class="crm-card warranty-card">
+            <div class="crm-card-head">
+              <h3>Warranty Projects</h3>
+              <span class="billing-stage-summary">Track closeout by job</span>
+            </div>
+            <div class="order-table-wrap">
+              <table class="order-table warranty-project-table">
+                <thead>
+                  <tr>
+                    <th>Project</th>
+                    <th>Customer</th>
+                    <th>Started</th>
+                    <th>Warranty Start</th>
+                    <th>Complete</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="warrantyProjectsBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="warrantyPrintArea" class="crm-card warranty-card">
+            <div class="crm-card-head">
+              <h3>Walkthrough Deficiency List</h3>
+              <button id="printDeficiencyListBtn" class="secondary" type="button">Print deficiency list</button>
+            </div>
+            <div id="warrantyPrintHeader" class="warranty-print-header"></div>
+            <div class="warranty-form-grid">
+              <label>
+                Project
+                <select id="warrantyDeficiencyProject"></select>
+              </label>
+              <label>
+                Deficiency
+                <input id="warrantyDeficiencyText" placeholder="Item to complete or repair" />
+              </label>
+              <label>
+                Assigned to
+                <input id="warrantyDeficiencyAssignedTo" placeholder="Trade, vendor, or team member" />
+              </label>
+              <label>
+                Picture
+                <input id="warrantyDeficiencyPhoto" type="file" accept="image/*" />
+              </label>
+            </div>
+            <label>
+              Notes
+              <textarea id="warrantyDeficiencyNotes" rows="3" placeholder="Walkthrough notes, room, materials, or next steps"></textarea>
+            </label>
+            <button id="addWarrantyDeficiencyBtn" type="button">Add deficiency</button>
+            <div class="order-table-wrap warranty-deficiency-wrap">
+              <table class="order-table warranty-deficiency-table">
+                <thead>
+                  <tr>
+                    <th>Done</th>
+                    <th>Deficiency</th>
+                    <th>Assigned to</th>
+                    <th>Picture</th>
+                    <th>Notes</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="warrantyDeficienciesBody"></tbody>
+              </table>
+            </div>
+          </section>
         </section>
 
         <section id="reviewView" class="view">
@@ -767,8 +1163,8 @@
       <div class="management-breakdown-shell">
         <div class="document-modal-toolbar">
           <div>
-            <span>Task breakdown</span>
-            <strong id="taskBreakdownTitle">Tasks</strong>
+            <span>To-do breakdown</span>
+            <strong id="taskBreakdownTitle">To-Dos</strong>
           </div>
           <button id="closeTaskBreakdownBtn" class="secondary" type="button">Close</button>
         </div>
@@ -776,6 +1172,23 @@
       </div>
     </section>
 
-    <script src="./app.js?v=contract-tab"></script>
+    <section id="jobFilePreviewModal" class="document-modal" hidden>
+      <div class="document-modal-backdrop" data-close-job-file-preview></div>
+      <div class="file-preview-shell">
+        <div class="document-modal-toolbar">
+          <div>
+            <span>Job file preview</span>
+            <strong id="jobFilePreviewTitle">File</strong>
+          </div>
+          <div class="file-preview-actions">
+            <a id="jobFilePreviewDownload" class="secondary" href="#" download>Download</a>
+            <button id="closeJobFilePreviewBtn" class="secondary" type="button">Close</button>
+          </div>
+        </div>
+        <div id="jobFilePreviewBody" class="file-preview-body"></div>
+      </div>
+    </section>
+
+    <script src="./app.js?v=crm-six-lanes"></script>
   </body>
 </html>

@@ -24,7 +24,13 @@ const state = {
     salesperson: "Chris Peters",
     interestedModels: "",
     projectAddress: "",
+    billingStages: [],
     notes: [],
+    warranty: {
+      complete: false,
+      notes: "",
+      deficiencies: [],
+    },
     tasks: [
       { text: "Confirm project scope", done: false },
       { text: "Review estimate margin", done: false },
@@ -41,10 +47,14 @@ const state = {
     tradeFilter: "All trades",
     editorOpen: false,
     dayPopupDate: "",
+    resizeDrag: null,
+    moveDrag: null,
+    pendingResize: null,
   },
   selections: [],
   activeSelectionCategory: "",
   output: {
+    estimateVersionId: "current",
     estimateDate: "",
     providedBy: "",
     location: "",
@@ -61,9 +71,28 @@ const state = {
     customerName: "",
     location: "",
     depositTerms: "Deposit and payment schedule to be confirmed with Zak's Homes & Cottages prior to production start.",
+    approval: {
+      status: "Pending review",
+      approvedBy: "",
+      approvedRole: "",
+      approvedAt: "",
+      note: "",
+      signature: "",
+    },
     inclusions: {},
     exclusions: {},
   },
+  purchaseOrders: [],
+  selectedPurchaseOrderId: "",
+  changeOrders: [],
+  selectedChangeOrderId: "",
+  jobFiles: [],
+  vendors: [],
+  selectedVendorId: "",
+  openJobFilePreviewId: "",
+  openJobFilePreviewProjectId: "",
+  jobFilePreviewObjectUrl: "",
+  jobFilePreviewRenderToken: 0,
   estimateVersions: [],
   sentEstimateVersionId: "",
   openEstimateVersionId: "",
@@ -71,6 +100,10 @@ const state = {
     projectId: "current",
     owner: "All owners",
     sort: "due",
+  },
+  selectedProjectTask: null,
+  warranty: {
+    selectedProjectId: "current",
   },
   taskBreakdown: null,
   managementBreakdown: null,
@@ -82,10 +115,10 @@ const state = {
 
 const users = [
   { id: "chris", name: "Chris Peters", role: "Owner", password: "zaks", permissions: ["all"] },
-  { id: "angela", name: "Angela Kiedrowski", role: "Sales", password: "zaks", permissions: ["crm", "estimate", "output", "contract", "tasks", "schedule", "selections", "allowances", "review"] },
-  { id: "office", name: "Office Team", role: "Office", password: "zaks", permissions: ["crm", "contract", "tasks", "schedule", "selections", "review"] },
-  { id: "production", name: "Production Team", role: "Production", password: "zaks", permissions: ["contract", "tasks", "schedule", "selections", "review"] },
-  { id: "accounting", name: "Accounting Team", role: "Accounting", password: "zaks", permissions: ["allowances", "review"] },
+  { id: "angela", name: "Angela Kiedrowski", role: "Sales", password: "zaks", permissions: ["crm", "estimate", "output", "contract", "tasks", "schedule", "selections", "vendors", "jobFiles", "warranty", "billingStages", "allowances", "purchaseOrders", "changeOrders", "review"] },
+  { id: "office", name: "Office Team", role: "Office", password: "zaks", permissions: ["crm", "contract", "tasks", "schedule", "selections", "vendors", "jobFiles", "warranty", "billingStages", "purchaseOrders", "changeOrders", "review"] },
+  { id: "production", name: "Production Team", role: "Production", password: "zaks", permissions: ["contract", "tasks", "schedule", "selections", "vendors", "jobFiles", "warranty", "billingStages", "purchaseOrders", "changeOrders", "review"] },
+  { id: "accounting", name: "Accounting Team", role: "Accounting", password: "zaks", permissions: ["vendors", "billingStages", "allowances", "purchaseOrders", "changeOrders", "review"] },
 ];
 
 const selectionTemplate = [
@@ -204,6 +237,16 @@ const scheduleTemplate = [
   { name: "Final walkthrough", department: "Sales", trade: "Sales", offset: 110 },
   { name: "Possession / closeout", department: "Office", trade: "Accounting", offset: 120 },
 ];
+
+const billingStageTemplate = [
+  { id: "framing", group: "Project Billing", label: "Completion of Framing" },
+  { id: "drywall", group: "Project Billing", label: "Completion of Drywall" },
+  { id: "rtm", group: "Project Billing", label: "Completion of RTM" },
+  { id: "site-foundation", group: "Site Work", label: "Completion of Site Foundation" },
+  { id: "site-work", group: "Site Work", label: "Completion of Site Work" },
+];
+
+const billingStageStatuses = ["Not started", "Complete", "Invoiced", "Paid"];
 
 const defaultOutputExclusions = [
   "Engineering review - additional material and labor requirements",
@@ -450,6 +493,20 @@ function addDaysIso(dateText, days) {
   return `${date.getFullYear()}-${nextMonth}-${nextDay}`;
 }
 
+function dayDiff(startDate, endDate) {
+  const [startYear, startMonth, startDay] = (startDate || todayIso()).split("-").map(Number);
+  const [endYear, endMonth, endDay] = (endDate || startDate || todayIso()).split("-").map(Number);
+  const start = new Date(startYear, startMonth - 1, startDay);
+  const end = new Date(endYear, endMonth - 1, endDay);
+  return Math.round((end - start) / 86400000);
+}
+
+function dateRangeIncludes(dateText, startDate, endDate) {
+  if (!dateText || !startDate) return false;
+  const end = endDate || startDate;
+  return dateText >= startDate && dateText <= end;
+}
+
 function prettyDate(dateText) {
   if (!dateText) return "Not set";
   const [year, month, day] = dateText.split("-").map(Number);
@@ -458,6 +515,13 @@ function prettyDate(dateText) {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function formatFileSize(bytes) {
+  const value = num(bytes);
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
 }
 
 function monthKey(dateText = todayIso()) {
@@ -1777,8 +1841,10 @@ function saveEstimateVersion() {
 function markEstimateVersionSent(versionId) {
   if (!state.estimateVersions?.some((version) => version.id === versionId)) return;
   state.sentEstimateVersionId = versionId;
+  state.output.estimateVersionId = versionId;
   saveCrmRecord();
   renderEstimateVersions();
+  renderEstimateOutput();
 }
 
 function renameEstimateVersion(versionId) {
@@ -1882,6 +1948,10 @@ function outputState() {
   const address = els.crmProjectAddress?.value?.trim();
   if (!state.output.manual) state.output.manual = {};
   if (!state.output.descriptionsManual) state.output.descriptionsManual = {};
+  if (!state.output.estimateVersionId) state.output.estimateVersionId = state.sentEstimateVersionId || "current";
+  if (state.output.estimateVersionId !== "current" && !state.estimateVersions?.some((version) => version.id === state.output.estimateVersionId)) {
+    state.output.estimateVersionId = "current";
+  }
   if (!state.output.manual.estimateDate) state.output.estimateDate = state.output.estimateDate || todayIso();
   if (!state.output.manual.providedBy) state.output.providedBy = loggedInSalespersonName();
   if (!state.output.manual.location) state.output.location = address || (town ? `${town}, ${province}` : `, ${province}`);
@@ -1896,8 +1966,35 @@ function outputState() {
   return state.output;
 }
 
-function proposalLines() {
-  return state.lines.filter((line) => line.visible && lineTotals(line).retail > 0);
+function proposalVersionOptions(selectedId) {
+  const currentSnapshot = estimateSnapshot();
+  return [
+    `<option value="current" ${selectedId === "current" ? "selected" : ""}>Current working estimate - ${money.format(currentSnapshot.totals.total)}</option>`,
+    ...(state.estimateVersions || []).map(
+      (version) =>
+        `<option value="${escapeAttr(version.id)}" ${selectedId === version.id ? "selected" : ""}>${escapeAttr(version.versionName)} - ${money.format(version.totals.total)}</option>`,
+    ),
+  ].join("");
+}
+
+function selectedProposalEstimate() {
+  const output = outputState();
+  const saved = state.estimateVersions?.find((version) => version.id === output.estimateVersionId);
+  if (saved) return saved;
+  const snapshot = estimateSnapshot();
+  return {
+    id: "current",
+    versionName: "Current working estimate",
+    customerName: els.customerName?.value || "",
+    projectName: els.projectName?.value || "",
+    projectType: els.projectType?.value || "",
+    totals: snapshot.totals,
+    lines: snapshot.lines,
+  };
+}
+
+function proposalLines(estimate = selectedProposalEstimate()) {
+  return estimate.lines.filter((line) => (line.visible === undefined || line.visible) && num(line.retail) > 0);
 }
 
 function formatQuantity(value) {
@@ -1931,10 +2028,10 @@ function outputGroupForLine(line) {
   });
 }
 
-function groupedProposalLines() {
+function groupedProposalLines(estimate = selectedProposalEstimate()) {
   const groups = outputGroups.map((group) => ({ title: group.title, lines: [] }));
   const other = { title: "Other Included Items", lines: [] };
-  proposalLines().forEach((line) => {
+  proposalLines(estimate).forEach((line) => {
     const group = outputGroupForLine(line);
     const target = groups.find((item) => item.title === group?.title) || other;
     target.lines.push(line);
@@ -1945,12 +2042,16 @@ function groupedProposalLines() {
 function renderEstimateOutput() {
   if (!els.proposalPreview) return;
   const output = outputState();
-  const totals = grandTotals();
-  const groups = groupedProposalLines();
-  const projectName = els.projectName?.value || "Project";
-  const customerName = els.customerName?.value || "";
-  const estimateFor = `${els.houseSqft?.value || ""} SQ FT "${projectName}" ${els.projectType?.value || ""}`.trim();
+  const estimate = selectedProposalEstimate();
+  const totals = estimate.totals;
+  const groups = groupedProposalLines(estimate);
+  const projectName = estimate.projectName || els.projectName?.value || "Project";
+  const customerName = estimate.customerName || els.customerName?.value || "";
+  const projectType = estimate.projectType || els.projectType?.value || "";
+  const estimateFor = `${els.houseSqft?.value || ""} SQ FT "${projectName}" ${projectType}`.trim();
   const estimateDateText = prettyDate(output.estimateDate);
+  els.outputEstimateVersion.innerHTML = proposalVersionOptions(output.estimateVersionId);
+  els.outputEstimateVersion.value = output.estimateVersionId;
   els.outputEstimateDate.value = output.estimateDate;
   els.outputProvidedBy.value = output.providedBy;
   els.outputLocation.value = output.location;
@@ -1958,7 +2059,7 @@ function renderEstimateOutput() {
   els.outputMovingNotes.value = output.movingNotes;
   els.outputExclusions.value = output.exclusions;
 
-  els.outputLineEditor.innerHTML = proposalLines()
+  els.outputLineEditor.innerHTML = proposalLines(estimate)
     .map(
       (line) => `
         <label data-output-line="${line.id}">
@@ -1999,6 +2100,7 @@ function renderEstimateOutput() {
       <div><dt>Estimate provided to:</dt><dd>${escapeAttr(customerName)}</dd></div>
       <div><dt>Location:</dt><dd>${escapeAttr(output.location)}</dd></div>
       <div><dt>Estimate for:</dt><dd>${escapeAttr(estimateFor)}</dd></div>
+      <div><dt>Estimate source:</dt><dd>${escapeAttr(estimate.versionName || "Current working estimate")}</dd></div>
       <div><dt>Estimate date:</dt><dd>${escapeAttr(estimateDateText)}</dd></div>
       <div><dt>Estimate provided by:</dt><dd>${escapeAttr(output.providedBy)}</dd></div>
     </dl>
@@ -2036,6 +2138,7 @@ function contractState() {
   if (!state.contract) state.contract = {};
   if (!state.contract.inclusions) state.contract.inclusions = {};
   if (!state.contract.exclusions) state.contract.exclusions = {};
+  if (!state.contract.approval) state.contract.approval = {};
   contractInclusionOptions.forEach((item) => {
     if (state.contract.inclusions[item] === undefined) state.contract.inclusions[item] = true;
   });
@@ -2047,7 +2150,97 @@ function contractState() {
   if (!state.contract.customerName) state.contract.customerName = els.customerName?.value || "";
   if (!state.contract.location) state.contract.location = els.crmProjectAddress?.value || outputState().location || "";
   if (!state.contract.depositTerms) state.contract.depositTerms = "Deposit and payment schedule to be confirmed with Zak's Homes & Cottages prior to production start.";
+  state.contract.approval = {
+    status: state.contract.approval.status || "Pending review",
+    approvedBy: state.contract.approval.approvedBy || "",
+    approvedRole: state.contract.approval.approvedRole || "",
+    approvedAt: state.contract.approval.approvedAt || "",
+    note: state.contract.approval.note || "",
+    signature: state.contract.approval.signature || "",
+  };
   return state.contract;
+}
+
+function canApproveContract() {
+  const user = state.auth.currentUser;
+  if (!user) return false;
+  return user.permissions.includes("all") || user.permissions.includes("management");
+}
+
+function isContractApproved() {
+  const contract = contractState();
+  return contract.approval.status === "Approved" && contract.approval.signature === contractApprovalSignature();
+}
+
+function contractApprovalSignature(estimate = selectedContractEstimate()) {
+  const contract = contractState();
+  return JSON.stringify({
+    date: contract.date,
+    estimateVersionId: contract.estimateVersionId,
+    estimateTotal: estimate.totals?.total || 0,
+    customerName: contract.customerName,
+    location: contract.location,
+    depositTerms: contract.depositTerms,
+    inclusions: contract.inclusions,
+    exclusions: contract.exclusions,
+  });
+}
+
+function resetContractApproval(reason = "Contract changed after approval.") {
+  const contract = contractState();
+  if (contract.approval.status !== "Approved") return;
+  contract.approval = {
+    status: "Pending review",
+    approvedBy: "",
+    approvedRole: "",
+    approvedAt: "",
+    note: reason,
+    signature: "",
+  };
+}
+
+function approveContract() {
+  if (!canApproveContract()) {
+    els.contractApprovalMessage.textContent = "Only an owner or upper management user can approve the contract.";
+    return;
+  }
+  const contract = contractState();
+  contract.approval = {
+    status: "Approved",
+    approvedBy: state.auth.currentUser.name,
+    approvedRole: state.auth.currentUser.role,
+    approvedAt: new Date().toISOString(),
+    note: els.contractApprovalNote.value.trim(),
+    signature: contractApprovalSignature(),
+  };
+  renderContract();
+  saveActiveCrmRecordEdits();
+}
+
+function revokeContractApproval() {
+  if (!canApproveContract()) {
+    els.contractApprovalMessage.textContent = "Only an owner or upper management user can revoke contract approval.";
+    return;
+  }
+  const contract = contractState();
+  contract.approval = {
+    status: "Pending review",
+    approvedBy: "",
+    approvedRole: "",
+    approvedAt: "",
+    note: els.contractApprovalNote.value.trim() || "Approval revoked.",
+    signature: "",
+  };
+  renderContract();
+  saveActiveCrmRecordEdits();
+}
+
+function printApprovedContract() {
+  if (!isContractApproved()) {
+    els.contractApprovalMessage.textContent = "Contract must be reviewed and approved before it can be printed or emailed.";
+    return;
+  }
+  window.print();
 }
 
 function contractVersionOptions(selectedId) {
@@ -2098,12 +2291,24 @@ function renderContract() {
   const included = contractInclusionOptions.filter((item) => contract.inclusions[item]);
   const excluded = contractExclusionOptions.filter((item) => contract.exclusions[item]);
   const activeLines = estimate.lines.filter((line) => line.total > 0);
+  const approved = isContractApproved();
+  const staleApproval = contract.approval.status === "Approved" && !approved;
+  const approvalDate = contract.approval.approvedAt ? new Date(contract.approval.approvedAt).toLocaleString("en-CA") : "";
   els.contractDate.value = contract.date;
   els.contractEstimateVersion.innerHTML = contractVersionOptions(contract.estimateVersionId);
   els.contractEstimateVersion.value = contract.estimateVersionId;
   els.contractCustomerName.value = contract.customerName;
   els.contractLocation.value = contract.location;
   els.contractDepositTerms.value = contract.depositTerms;
+  els.contractApprovalNote.value = contract.approval.note || "";
+  els.approveContractBtn.disabled = !canApproveContract() || approved;
+  els.revokeContractApprovalBtn.disabled = !canApproveContract() || !approved;
+  els.printContractBtn.disabled = !approved;
+  els.contractApprovalStatus.className = `contract-approval-status ${approved ? "approved" : "pending"}`;
+  els.contractApprovalStatus.innerHTML = approved
+    ? `<strong>Approved</strong><span>${escapeAttr(contract.approval.approvedBy)} (${escapeAttr(contract.approval.approvedRole)}) - ${escapeAttr(approvalDate)}</span>`
+    : `<strong>${staleApproval ? "Approval needs review" : "Pending owner review"}</strong><span>Printing and email are locked until an owner or upper management approves this contract.</span>`;
+  els.contractApprovalMessage.textContent = approved ? "Approved contract is unlocked for print/save PDF." : "Review and sign-off required before print/save PDF or email.";
   renderContractChecklist(els.contractInclusions, contractInclusionOptions, contract.inclusions, "data-contract-include");
   renderContractChecklist(els.contractExclusions, contractExclusionOptions, contract.exclusions, "data-contract-exclude");
 
@@ -2136,7 +2341,9 @@ function renderContract() {
       <div><dt>Contract date:</dt><dd>${escapeAttr(prettyDate(contract.date))}</dd></div>
       <div><dt>Estimate version:</dt><dd>${escapeAttr(estimate.versionName)}</dd></div>
       <div><dt>Contract amount:</dt><dd>${escapeAttr(money.format(estimate.totals.total))}</dd></div>
+      <div><dt>Approval:</dt><dd>${approved ? `${escapeAttr(contract.approval.approvedBy)} - ${escapeAttr(approvalDate)}` : "Pending owner review"}</dd></div>
     </dl>
+    ${approved ? "" : `<div class="contract-watermark">Pending approval - not for signature or distribution</div>`}
     <section class="proposal-section">
       <h4>Agreement Summary</h4>
       <p>Zak's Homes & Cottages agrees to provide the work selected in this contract and the attached estimate version, subject to final approvals, selections, site conditions, and written change orders.</p>
@@ -2186,6 +2393,7 @@ function handleOutputEdit(event) {
     return;
   }
   const fieldMap = {
+    outputEstimateVersion: "estimateVersionId",
     outputEstimateDate: "estimateDate",
     outputProvidedBy: "providedBy",
     outputLocation: "location",
@@ -2196,7 +2404,7 @@ function handleOutputEdit(event) {
   const field = fieldMap[event.target.id];
   if (!field) return;
   output[field] = event.target.value;
-  output.manual[field] = true;
+  if (field !== "estimateVersionId") output.manual[field] = true;
   if (event.type === "change") renderEstimateOutput();
   saveActiveCrmRecordEdits();
 }
@@ -2204,12 +2412,14 @@ function handleOutputEdit(event) {
 function handleContractEdit(event) {
   const contract = contractState();
   if (event.target.dataset.contractInclude) {
+    resetContractApproval();
     contract.inclusions[event.target.dataset.contractInclude] = event.target.checked;
     renderContract();
     saveActiveCrmRecordEdits();
     return;
   }
   if (event.target.dataset.contractExclude) {
+    resetContractApproval();
     contract.exclusions[event.target.dataset.contractExclude] = event.target.checked;
     renderContract();
     saveActiveCrmRecordEdits();
@@ -2221,10 +2431,16 @@ function handleContractEdit(event) {
     contractCustomerName: "customerName",
     contractLocation: "location",
     contractDepositTerms: "depositTerms",
+    contractApprovalNote: "approvalNote",
   };
   const field = fieldMap[event.target.id];
   if (!field) return;
-  contract[field] = event.target.value;
+  if (field === "approvalNote") {
+    contract.approval.note = event.target.value;
+  } else {
+    resetContractApproval();
+    contract[field] = event.target.value;
+  }
   if (event.type === "change") renderContract();
   saveActiveCrmRecordEdits();
 }
@@ -2247,8 +2463,6 @@ function getAllowanceState(line) {
 function renderAllowances() {
   if (!els.allowancesBody) return;
   const lines = allowanceLines();
-  let allowanceTotal = 0;
-  let actualTotal = 0;
 
   els.allowancesBody.innerHTML = lines
     .map((line) => {
@@ -2256,8 +2470,6 @@ function renderAllowances() {
       const record = getAllowanceState(line);
       const actual = record.actual === "" ? 0 : num(record.actual);
       const variance = actual - allowance;
-      allowanceTotal += allowance;
-      actualTotal += actual;
       return `
         <tr data-allowance="${line.id}">
           <td>${line.section}</td>
@@ -2278,6 +2490,27 @@ function renderAllowances() {
     })
     .join("");
 
+  updateAllowanceTotals();
+}
+
+function updateAllowanceTotals() {
+  if (!els.allowanceTotal) return;
+  let allowanceTotal = 0;
+  let actualTotal = 0;
+  allowanceLines().forEach((line) => {
+    const allowance = allowanceAmount(line);
+    const record = getAllowanceState(line);
+    allowanceTotal += allowance;
+    actualTotal += record.actual === "" ? 0 : num(record.actual);
+    const row = els.allowancesBody?.querySelector(`[data-allowance="${CSS.escape(line.id)}"]`);
+    const varianceCell = row?.querySelector(".money:nth-of-type(2)");
+    if (varianceCell) {
+      const variance = (record.actual === "" ? 0 : num(record.actual)) - allowance;
+      varianceCell.textContent = money.format(variance);
+      varianceCell.classList.toggle("over", variance > 0);
+      varianceCell.classList.toggle("under", variance < 0);
+    }
+  });
   const varianceTotal = actualTotal - allowanceTotal;
   els.allowanceTotal.textContent = money.format(allowanceTotal);
   els.allowanceActualTotal.textContent = money.format(actualTotal);
@@ -2292,12 +2525,23 @@ function createSelectionItems(items = selectionTemplate) {
   const savedByKey = new Map(source.map((item) => [`${item.category}::${item.item}`, item]));
   const merged = selectionTemplate.map((template) => {
     const saved = savedByKey.get(`${template.category}::${template.item}`) || {};
-    return { ...template, ...saved, id: template.id };
+    return { ...template, ...saved, id: template.id, photo: normalizeSelectionPhoto(saved.photo) };
   });
   const extraSavedItems = source
     .filter((item) => !templateKeys.has(`${item.category}::${item.item}`))
-    .map((item, index) => ({ ...item, id: item.id || `selection-extra-${index + 1}` }));
+    .map((item, index) => ({ ...item, id: item.id || `selection-extra-${index + 1}`, photo: normalizeSelectionPhoto(item.photo) }));
   return [...merged, ...extraSavedItems];
+}
+
+function normalizeSelectionPhoto(photo) {
+  if (!photo?.dataUrl) return null;
+  return {
+    name: photo.name || "Project info photo",
+    type: photo.type || "image/*",
+    size: num(photo.size),
+    uploadedAt: photo.uploadedAt || new Date().toISOString(),
+    dataUrl: photo.dataUrl,
+  };
 }
 
 function ensureSelections() {
@@ -2393,6 +2637,18 @@ function renderSelections() {
               Notes
               <textarea data-selection-field="notes" rows="2" placeholder="Supplier, model number, drawing note, or customer note">${escapeAttr(item.notes)}</textarea>
             </label>
+            <div class="selection-photo-control">
+              <span>Photo</span>
+              <div>
+                ${
+                  item.photo
+                    ? `<button class="selection-photo-link" type="button" data-preview-selection-photo="${escapeAttr(item.id)}">${escapeAttr(item.photo.name)}</button>
+                       <button class="secondary" type="button" data-remove-selection-photo="${escapeAttr(item.id)}">Remove</button>`
+                    : `<small>No photo attached</small>`
+                }
+              </div>
+              <input data-selection-photo="${escapeAttr(item.id)}" type="file" accept="image/*" />
+            </div>
           </article>
         `,
       )
@@ -2419,6 +2675,11 @@ function renderSelections() {
           </td>
           <td><input data-selection-field="assignedTo" value="${escapeAttr(item.assignedTo)}" placeholder="Owner" /></td>
           <td><input data-selection-field="dueDate" type="date" value="${item.dueDate || ""}" /></td>
+          <td>${
+            item.photo
+              ? `<button class="selection-photo-link" type="button" data-preview-selection-photo="${escapeAttr(item.id)}">${escapeAttr(item.photo.name)}</button>`
+              : `<span class="muted-cell">No photo</span>`
+          }</td>
           <td><input data-selection-field="notes" value="${escapeAttr(item.notes)}" placeholder="Notes / supplier / model #" /></td>
         </tr>
       `,
@@ -2449,6 +2710,7 @@ function handleSelectionEdit(event) {
   if (event.type === "change" || field === "status") {
     renderSelections();
   }
+  saveActiveCrmRecordEdits();
 }
 
 function createScheduleItems(startDate = todayIso()) {
@@ -2459,6 +2721,7 @@ function createScheduleItems(startDate = todayIso()) {
     trade: item.trade || item.department,
     subtrade: "",
     targetDate: addDaysIso(startDate, item.offset),
+    endDate: addDaysIso(startDate, item.offset),
     status: index === 0 ? "In progress" : "Not started",
     notes: "",
   }));
@@ -2475,6 +2738,8 @@ function ensureSchedule() {
   state.schedule.items.forEach((item) => {
     if (!item.trade) item.trade = item.department || "Production";
     if (item.subtrade === undefined) item.subtrade = "";
+    if (!item.endDate) item.endDate = item.targetDate || state.schedule.startDate;
+    if (item.targetDate && item.endDate < item.targetDate) item.endDate = item.targetDate;
   });
   if (!state.schedule.calendarMonth) state.schedule.calendarMonth = monthKey(state.schedule.startDate);
   if (!state.schedule.selectedItemId || !state.schedule.items.some((item) => item.id === state.schedule.selectedItemId)) {
@@ -2497,24 +2762,114 @@ function tradeOptionsHtml(selected) {
   return scheduleTrades.map((trade) => `<option ${selected === trade ? "selected" : ""}>${trade}</option>`).join("");
 }
 
+function scheduleFilterValue(type = "all", trade = "", company = "") {
+  if (type === "company") return `company:${encodeURIComponent(trade)}:${encodeURIComponent(company)}`;
+  if (type === "trade") return `trade:${encodeURIComponent(trade)}`;
+  return "all";
+}
+
+function parseScheduleFilter(value) {
+  if (!value || value === "All trades" || value === "all") return { type: "all", label: "All trades" };
+  if (scheduleTrades.includes(value)) return { type: "trade", trade: value, label: value };
+  const [type, trade = "", company = ""] = String(value).split(":");
+  if (type === "trade") {
+    const tradeName = decodeURIComponent(trade);
+    return { type: "trade", trade: tradeName, label: tradeName };
+  }
+  if (type === "company") {
+    const tradeName = decodeURIComponent(trade);
+    const companyName = decodeURIComponent(company);
+    return { type: "company", trade: tradeName, company: companyName, label: `${tradeName} / ${companyName}` };
+  }
+  return { type: "all", label: "All trades" };
+}
+
+function companyMatches(a, b) {
+  return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+}
+
+function allScheduleRecords() {
+  const records = [{ schedule: state.schedule }, ...state.crm.records.filter((record) => record.schedule?.items?.length)];
+  return records.filter((record, index, list) => list.findIndex((item) => item.schedule === record.schedule) === index);
+}
+
+function scheduleCompaniesByTrade() {
+  const groups = Object.fromEntries(scheduleTrades.map((trade) => [trade, new Set()]));
+  state.vendors.forEach((vendor) => {
+    const trade = vendor.trade || "Project Materials";
+    if (!groups[trade]) groups[trade] = new Set();
+    groups[trade].add(vendor.company);
+  });
+  allScheduleRecords().forEach((record) => {
+    (record.schedule?.items || []).forEach((item) => {
+      const trade = item.trade || item.department;
+      const company = String(item.subtrade || "").trim();
+      if (!trade || !company) return;
+      if (!groups[trade]) groups[trade] = new Set();
+      groups[trade].add(company);
+    });
+  });
+  return groups;
+}
+
+function scheduleTradeFilterOptionsHtml(selectedValue) {
+  const selected = parseScheduleFilter(selectedValue);
+  const selectedNormalized =
+    selected.type === "company"
+      ? scheduleFilterValue("company", selected.trade, selected.company)
+      : selected.type === "trade"
+        ? scheduleFilterValue("trade", selected.trade)
+        : "all";
+  const groups = scheduleCompaniesByTrade();
+  return [
+    `<option value="all" ${selectedNormalized === "all" ? "selected" : ""}>All trades</option>`,
+    ...scheduleTrades.map((trade) => {
+      const tradeValue = scheduleFilterValue("trade", trade);
+      const companies = [...(groups[trade] || [])].sort((a, b) => a.localeCompare(b));
+      return `
+        <optgroup label="${escapeAttr(trade)}">
+          <option value="${escapeAttr(tradeValue)}" ${selectedNormalized === tradeValue ? "selected" : ""}>All ${escapeAttr(trade)}</option>
+          ${companies
+            .map((company) => {
+              const companyValue = scheduleFilterValue("company", trade, company);
+              return `<option value="${escapeAttr(companyValue)}" ${selectedNormalized === companyValue ? "selected" : ""}>${escapeAttr(company)}</option>`;
+            })
+            .join("")}
+        </optgroup>
+      `;
+    }),
+  ].join("");
+}
+
+function normalizedScheduleFilterValue(value) {
+  const filter = parseScheduleFilter(value);
+  if (filter.type === "company") return scheduleFilterValue("company", filter.trade, filter.company);
+  if (filter.type === "trade") return scheduleFilterValue("trade", filter.trade);
+  return "all";
+}
+
 function currentProjectName() {
   return els.projectName?.value || "Current project";
 }
 
+function projectOptionLabel(option) {
+  return `${option.projectName || "Untitled project"}${option.customerName ? ` - ${option.customerName}` : ""}`;
+}
+
 function scheduleProjectOptions() {
-  const options = [{ id: state.crm.activeRecordId || "current", projectName: currentProjectName(), current: true }];
+  const options = [{ id: state.crm.activeRecordId || "current", projectName: currentProjectName(), customerName: els.customerName?.value || "New Customer", current: true }];
   state.crm.records.forEach((record) => {
     if (!record.projectName) return;
     if (record.id === state.crm.activeRecordId) return;
     if (options.some((option) => option.projectName === record.projectName)) return;
-    options.push({ id: record.id, projectName: record.projectName, current: false });
+    options.push({ id: record.id, projectName: record.projectName, customerName: record.customerName || "No customer", current: false });
   });
   return options;
 }
 
 function projectOptionsHtml(selectedId = state.crm.activeRecordId || "current") {
   return scheduleProjectOptions()
-    .map((option) => `<option value="${escapeAttr(option.id)}" ${option.id === selectedId ? "selected" : ""}>${escapeAttr(option.projectName)}</option>`)
+    .map((option) => `<option value="${escapeAttr(option.id)}" ${option.id === selectedId ? "selected" : ""}>${escapeAttr(projectOptionLabel(option))}</option>`)
     .join("");
 }
 
@@ -2549,12 +2904,18 @@ function calendarProjectRecords() {
 }
 
 function calendarItems() {
-  const trade = state.schedule.tradeFilter || "All trades";
+  const filter = parseScheduleFilter(state.schedule.tradeFilter);
   return calendarProjectRecords().flatMap((record) =>
     (record.schedule?.items || [])
-      .filter((item) => trade === "All trades" || (item.trade || item.department) === trade)
+      .filter((item) => {
+        const itemTrade = item.trade || item.department;
+        if (filter.type === "all") return true;
+        if (filter.type === "trade") return itemTrade === filter.trade;
+        return itemTrade === filter.trade && companyMatches(item.subtrade, filter.company);
+      })
       .map((item) => ({
         ...item,
+        endDate: item.endDate || item.targetDate,
         projectId: record.id,
         projectName: record.projectName || "Project",
         isCurrentProject: record.id === (state.crm.activeRecordId || "current") || record.id === "current",
@@ -2576,13 +2937,361 @@ function selectedScheduleItem() {
   return state.schedule.items.find((item) => item.id === state.schedule.selectedItemId) || state.schedule.items[0];
 }
 
-function calendarEventHtml(item) {
+function scheduleForProject(projectId) {
+  if (!projectId || projectId === "current" || projectId === state.crm.activeRecordId) return state.schedule;
+  const record = state.crm.records.find((item) => item.id === projectId);
+  return record?.schedule || null;
+}
+
+function scheduleItemForProject(projectId, itemId) {
+  const schedule = scheduleForProject(projectId);
+  const item = schedule?.items?.find((entry) => entry.id === itemId);
+  return { schedule, item };
+}
+
+function persistScheduleProject(projectId) {
+  if (!projectId || projectId === "current" || projectId === state.crm.activeRecordId) {
+    saveActiveCrmRecordEdits();
+    return;
+  }
+  const record = state.crm.records.find((item) => item.id === projectId);
+  if (record) {
+    record.updatedAt = new Date().toISOString();
+    persistCrmRecords();
+  }
+}
+
+async function handleSelectionPhotoUpload(event) {
+  const input = event.target.closest("[data-selection-photo]");
+  const file = input?.files?.[0];
+  if (!input || !file) return;
+  const item = state.selections.find((entry) => entry.id === input.dataset.selectionPhoto);
+  if (!item) return;
+  item.photo = {
+    name: file.name,
+    type: file.type || "image/*",
+    size: file.size,
+    uploadedAt: new Date().toISOString(),
+    dataUrl: await readFileAsDataUrl(file),
+  };
+  input.value = "";
+  renderSelections();
+  saveActiveCrmRecordEdits();
+}
+
+function openSelectionPhotoPreview(selectionId) {
+  const item = state.selections.find((entry) => entry.id === selectionId);
+  if (!item?.photo?.dataUrl || !els.jobFilePreviewModal || !els.jobFilePreviewBody) return;
+  state.openJobFilePreviewId = "";
+  revokeJobFilePreviewObjectUrl();
+  els.jobFilePreviewTitle.textContent = item.photo.name || item.item || "Project info photo";
+  els.jobFilePreviewDownload.href = item.photo.dataUrl;
+  els.jobFilePreviewDownload.download = item.photo.name || "project-info-photo";
+  els.jobFilePreviewBody.classList.remove("pdf-pages");
+  els.jobFilePreviewBody.innerHTML = "";
+  const image = document.createElement("img");
+  image.src = item.photo.dataUrl;
+  image.alt = item.photo.name || item.item || "Project info photo";
+  els.jobFilePreviewBody.append(image);
+  els.jobFilePreviewModal.removeAttribute("hidden");
+}
+
+function removeSelectionPhoto(selectionId) {
+  const item = state.selections.find((entry) => entry.id === selectionId);
+  if (!item) return;
+  item.photo = null;
+  renderSelections();
+  saveActiveCrmRecordEdits();
+}
+
+function moveScheduleItemToDate(projectId, itemId, dateText) {
+  const { schedule, item } = scheduleItemForProject(projectId, itemId);
+  if (!schedule || !item || !dateText) return;
+  const length = Math.max(0, dayDiff(item.targetDate, item.endDate || item.targetDate));
+  item.targetDate = dateText;
+  item.endDate = addDaysIso(dateText, length);
+  schedule.selectedItemId = item.id;
+  schedule.calendarMonth = monthKey(dateText);
+  persistScheduleProject(projectId);
+  renderSchedule();
+}
+
+function resizeScheduleItemToDate(projectId, itemId, edge, dateText) {
+  const { schedule, item } = scheduleItemForProject(projectId, itemId);
+  if (!schedule || !item || !dateText) return;
+  if (edge === "start") {
+    item.targetDate = dateText;
+    if (!item.endDate || item.endDate < item.targetDate) item.endDate = item.targetDate;
+  } else {
+    item.endDate = dateText;
+    if (item.endDate < item.targetDate) item.targetDate = item.endDate;
+  }
+  schedule.selectedItemId = item.id;
+  schedule.calendarMonth = monthKey(item.targetDate);
+  persistScheduleProject(projectId);
+  renderSchedule();
+}
+
+function handleScheduleDragStart(event) {
+  const resizeHandle = event.target.closest("[data-schedule-resize]");
+  if (resizeHandle) {
+    event.stopPropagation();
+    event.dataTransfer.setData(
+      "application/zaks-schedule",
+      JSON.stringify({
+        action: "resize",
+        edge: resizeHandle.dataset.scheduleResize,
+        itemId: resizeHandle.dataset.scheduleEvent,
+        projectId: resizeHandle.dataset.scheduleProject,
+      }),
+    );
+    event.dataTransfer.effectAllowed = "move";
+    return true;
+  }
+  const scheduleEvent = event.target.closest("[data-schedule-event]");
+  if (!scheduleEvent || scheduleEvent.closest("[data-calendar-more]")) return false;
+  event.dataTransfer.setData(
+    "application/zaks-schedule",
+    JSON.stringify({
+      action: "move",
+      itemId: scheduleEvent.dataset.scheduleEvent,
+      projectId: scheduleEvent.dataset.scheduleProject,
+    }),
+  );
+  event.dataTransfer.effectAllowed = "move";
+  scheduleEvent.classList.add("dragging");
+  return true;
+}
+
+function handleScheduleDrop(event) {
+  const dateText = calendarDateFromPointer(event);
+  if (!dateText) return false;
+  const raw = event.dataTransfer.getData("application/zaks-schedule");
+  if (!raw) return false;
+  event.preventDefault();
+  try {
+    const payload = JSON.parse(raw);
+    if (payload.action === "resize") resizeScheduleItemToDate(payload.projectId, payload.itemId, payload.edge, dateText);
+    else moveScheduleItemToDate(payload.projectId, payload.itemId, dateText);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function calendarDateFromPointer(event) {
+  const directDay = event.target.closest("[data-calendar-date]");
+  if (directDay?.dataset.calendarDate) return directDay.dataset.calendarDate;
+  const weekRow = event.target.closest("[data-calendar-week]");
+  if (!weekRow) return "";
+  return calendarDateFromWeekPointer(weekRow, event.clientX);
+}
+
+function calendarDateFromViewportPoint(clientX, clientY, fallbackWeekRow = null) {
+  const target = document.elementFromPoint(clientX, clientY);
+  const directDay = target?.closest?.("[data-calendar-date]");
+  if (directDay?.dataset.calendarDate) return directDay.dataset.calendarDate;
+  const directWeek = target?.closest?.("[data-calendar-week]");
+  if (directWeek) return calendarDateFromWeekPointer(directWeek, clientX);
+  const weeks = Array.from(document.querySelectorAll("[data-calendar-week]"));
+  const weekAtY = weeks.find((week) => {
+    const rect = week.getBoundingClientRect();
+    return clientY >= rect.top && clientY <= rect.bottom;
+  });
+  if (weekAtY) return calendarDateFromWeekPointer(weekAtY, clientX);
+  if (fallbackWeekRow) return calendarDateFromWeekPointer(fallbackWeekRow, clientX);
+  return "";
+}
+
+function calendarDateFromWeekPointer(weekRow, clientX) {
+  const days = Array.from(weekRow.querySelectorAll("[data-calendar-date]"));
+  if (!days.length) return "";
+  const rect = weekRow.getBoundingClientRect();
+  const column = Math.min(6, Math.max(0, Math.floor(((clientX - rect.left) / rect.width) * 7)));
+  return days[column]?.dataset.calendarDate || "";
+}
+
+function highlightCalendarDropDay(event) {
+  document.querySelectorAll("[data-calendar-date]").forEach((day) => day.classList.remove("drag-over"));
+  const dateText = calendarDateFromPointer(event);
+  const targetDay = dateText ? document.querySelector(`[data-calendar-date="${dateText}"]`) : null;
+  targetDay?.classList.add("drag-over");
+}
+
+function beginScheduleResize(event) {
+  if (state.schedule.resizeDrag) return true;
+  let handle = event.target.closest("[data-schedule-resize]");
+  let scheduleEvent = handle?.closest("[data-schedule-event]");
+  let edge = handle?.dataset.scheduleResize || "";
+  if (!handle) {
+    scheduleEvent = event.target.closest("[data-schedule-event]");
+    if (!scheduleEvent || scheduleEvent.closest("[data-calendar-more]")) return false;
+    const rect = scheduleEvent.getBoundingClientRect();
+    const edgeZone = Math.min(28, rect.width * 0.28);
+    if (event.clientX - rect.left <= edgeZone) edge = "start";
+    else if (rect.right - event.clientX <= edgeZone) edge = "end";
+    else return false;
+    handle = scheduleEvent.querySelector(`[data-schedule-resize="${edge}"]`) || scheduleEvent;
+  }
+  const weekRow = scheduleEvent?.closest("[data-calendar-week]");
+  if (!weekRow) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  state.schedule.resizeDrag = {
+    edge,
+    itemId: scheduleEvent.dataset.scheduleEvent,
+    projectId: scheduleEvent.dataset.scheduleProject,
+    weekRow,
+    pointerId: event.pointerId ?? null,
+    lastDate: calendarDateFromViewportPoint(event.clientX, event.clientY, weekRow),
+  };
+  try {
+    if (event.pointerId !== undefined) handle.setPointerCapture?.(event.pointerId);
+  } catch {
+    // Some browsers only allow pointer capture during trusted pointer events.
+  }
+  document.body.classList.add("schedule-resizing");
+  highlightCalendarResizeDate(weekRow, event.clientX);
+  return true;
+}
+
+function beginScheduleMove(event) {
+  if (state.schedule.resizeDrag || state.schedule.moveDrag || event.target.closest("[data-schedule-resize]")) return false;
+  const scheduleEvent = event.target.closest("[data-schedule-event]");
+  const weekRow = scheduleEvent?.closest("[data-calendar-week]");
+  if (!scheduleEvent || !weekRow || scheduleEvent.closest("[data-calendar-more]")) return false;
+  event.preventDefault();
+  state.schedule.moveDrag = {
+    itemId: scheduleEvent.dataset.scheduleEvent,
+    projectId: scheduleEvent.dataset.scheduleProject,
+    weekRow,
+    startX: event.clientX,
+    startY: event.clientY,
+    moved: false,
+  };
+  scheduleEvent.classList.add("dragging");
+  highlightCalendarResizeDate(weekRow, event.clientX);
+  return true;
+}
+
+function highlightCalendarResizeDate(weekRow, clientX, clientY = null) {
+  document.querySelectorAll("[data-calendar-date]").forEach((day) => day.classList.remove("drag-over"));
+  const dateText = clientY === null ? calendarDateFromWeekPointer(weekRow, clientX) : calendarDateFromViewportPoint(clientX, clientY, weekRow);
+  const targetDay = dateText ? document.querySelector(`[data-calendar-date="${dateText}"]`) : null;
+  targetDay?.classList.add("drag-over");
+  return dateText;
+}
+
+function updateScheduleResize(event) {
+  const drag = state.schedule.resizeDrag;
+  if (!drag) return;
+  event.preventDefault();
+  drag.lastDate = highlightCalendarResizeDate(drag.weekRow, event.clientX, event.clientY) || drag.lastDate;
+}
+
+function updateScheduleMove(event) {
+  const drag = state.schedule.moveDrag;
+  if (!drag) return;
+  event.preventDefault();
+  if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) drag.moved = true;
+  highlightCalendarResizeDate(drag.weekRow, event.clientX);
+}
+
+function finishScheduleResize(event) {
+  const drag = state.schedule.resizeDrag;
+  if (!drag) return;
+  event.preventDefault();
+  const dateText = calendarDateFromViewportPoint(event.clientX, event.clientY, drag.weekRow) || drag.lastDate;
+  state.schedule.resizeDrag = null;
+  document.body.classList.remove("schedule-resizing");
+  document.querySelectorAll("[data-calendar-date]").forEach((day) => day.classList.remove("drag-over"));
+  if (dateText) resizeScheduleItemToDate(drag.projectId, drag.itemId, drag.edge, dateText);
+}
+
+function finishScheduleMove(event) {
+  const drag = state.schedule.moveDrag;
+  if (!drag) return false;
+  event.preventDefault();
+  const dateText = calendarDateFromWeekPointer(drag.weekRow, event.clientX);
+  document.querySelectorAll("[data-schedule-event]").forEach((item) => item.classList.remove("dragging"));
+  document.querySelectorAll("[data-calendar-date]").forEach((day) => day.classList.remove("drag-over"));
+  state.schedule.moveDrag = null;
+  if (drag.moved && dateText) {
+    moveScheduleItemToDate(drag.projectId, drag.itemId, dateText);
+    return true;
+  }
+  state.schedule.dayPopupDate = "";
+  state.schedule.selectedItemId = drag.itemId;
+  state.schedule.editorOpen = true;
+  renderSchedule();
+  return true;
+}
+
+function pickScheduleResizeEdge(button) {
+  const scheduleEvent = button.closest("[data-schedule-event]");
+  if (!scheduleEvent) return;
+  state.schedule.pendingResize = {
+    edge: button.dataset.scheduleResize,
+    itemId: scheduleEvent.dataset.scheduleEvent,
+    projectId: scheduleEvent.dataset.scheduleProject,
+  };
+  renderSchedule();
+}
+
+function applyPendingScheduleResize(dateText) {
+  const pending = state.schedule.pendingResize;
+  if (!pending || !dateText) return false;
+  state.schedule.pendingResize = null;
+  resizeScheduleItemToDate(pending.projectId, pending.itemId, pending.edge, dateText);
+  return true;
+}
+
+function calendarEventHtml(item, segment = {}) {
+  const isRange = item.endDate && item.endDate !== item.targetDate;
+  const pending = state.schedule.pendingResize;
+  const pendingClass = pending?.itemId === item.id && pending?.projectId === item.projectId ? `resizing-${pending.edge}` : "";
+  const gridStyle =
+    segment.startColumn && segment.endColumn ? `grid-column: ${segment.startColumn} / ${segment.endColumn}; --bar-row: ${segment.row || 1};` : "";
   return `
-    <strong class="calendar-event ${item.id === state.schedule.selectedItemId && item.isCurrentProject ? "active" : ""} ${item.isCurrentProject ? "" : "other-project"}" style="--event-color: ${projectColor(item.projectId)}" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}">
+    <strong class="calendar-event ${segment.startColumn ? "calendar-bar" : ""} ${isRange ? "range-event" : ""} ${pendingClass} ${item.id === state.schedule.selectedItemId && item.isCurrentProject ? "active" : ""} ${item.isCurrentProject ? "" : "other-project"}" style="--event-color: ${projectColor(item.projectId)}; ${gridStyle}" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}">
+      <button class="event-resize-handle event-resize-start" type="button" data-schedule-resize="start" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}" title="Drag or click, then choose a date"></button>
       <span>${escapeAttr(item.name)}</span>
       <small>${escapeAttr(state.schedule.scope === "all" ? `${item.projectName} - ${item.status}` : item.status)}</small>
+      <button class="event-resize-handle event-resize-end" type="button" data-schedule-resize="end" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}" title="Drag or click, then choose a date"></button>
     </strong>
   `;
+}
+
+function weekDatesForCalendar(stateMonth, weekStartIndex) {
+  return Array.from({ length: 7 }, (_, offset) => {
+    const [year, month] = stateMonth.split("-").map(Number);
+    const first = new Date(year, month - 1, 1);
+    const leadingDays = first.getDay();
+    const dayNumber = weekStartIndex + offset - leadingDays + 1;
+    const date = new Date(year, month - 1, dayNumber);
+    const dateMonth = String(date.getMonth() + 1).padStart(2, "0");
+    const dateDay = String(date.getDate()).padStart(2, "0");
+    return {
+      dateText: `${date.getFullYear()}-${dateMonth}-${dateDay}`,
+      dayNumber: date.getDate(),
+      isCurrentMonth: dateMonth === stateMonth.slice(5) && String(date.getFullYear()) === stateMonth.slice(0, 4),
+    };
+  });
+}
+
+function calendarBarSegments(weekDates, visibleItems) {
+  const weekStart = weekDates[0].dateText;
+  const weekEnd = weekDates[6].dateText;
+  return visibleItems
+    .filter((item) => (item.targetDate || "") <= weekEnd && (item.endDate || item.targetDate || "") >= weekStart)
+    .sort((a, b) => String(a.targetDate).localeCompare(String(b.targetDate)) || String(a.name).localeCompare(String(b.name)))
+    .map((item, index) => {
+      const segmentStart = item.targetDate < weekStart ? weekStart : item.targetDate;
+      const segmentEnd = (item.endDate || item.targetDate) > weekEnd ? weekEnd : item.endDate || item.targetDate;
+      const startColumn = weekDates.findIndex((day) => day.dateText === segmentStart) + 1;
+      const endColumn = weekDates.findIndex((day) => day.dateText === segmentEnd) + 2;
+      return { item, startColumn, endColumn, row: index + 1 };
+    });
 }
 
 function renderDayEvents(dateText, dayItems) {
@@ -2614,20 +3323,28 @@ function renderScheduleCalendar() {
   els.scheduleCalendarTitle.textContent = monthTitle(state.schedule.calendarMonth);
   els.scheduleCalendarSubtitle.textContent = `${
     state.schedule.scope === "all" ? "All saved projects" : currentProjectName()
-  } - ${state.schedule.tradeFilter || "All trades"}`;
+  } - ${parseScheduleFilter(state.schedule.tradeFilter).label}`;
 
-  els.scheduleCalendar.innerHTML = Array.from({ length: totalCells }, (_, index) => {
-    const dayNumber = index - leadingDays + 1;
-    const isCurrentMonth = dayNumber >= 1 && dayNumber <= daysInMonth;
-    const dateText = isCurrentMonth ? `${state.schedule.calendarMonth}-${String(dayNumber).padStart(2, "0")}` : "";
-    const dayItems = isCurrentMonth ? visibleItems.filter((item) => item.targetDate === dateText) : [];
+  els.scheduleCalendar.innerHTML = Array.from({ length: totalCells / 7 }, (_, weekIndex) => {
+    const weekDates = weekDatesForCalendar(state.schedule.calendarMonth, weekIndex * 7);
+    const segments = calendarBarSegments(weekDates, visibleItems);
     return `
-      <button class="calendar-day ${isCurrentMonth ? "" : "muted"} ${dateText === today ? "today" : ""} ${dayItems.length > 1 ? "compact" : ""}" type="button" data-calendar-date="${dateText}" ${isCurrentMonth ? "" : "disabled"}>
-        <span>${isCurrentMonth ? dayNumber : ""}</span>
-        <div>
-          ${renderDayEvents(dateText, dayItems)}
+      <section class="calendar-week-row" data-calendar-week style="--bar-count: ${Math.max(1, segments.length)}">
+        <div class="calendar-week-days">
+          ${weekDates
+            .map(
+              (day) => `
+                <button class="calendar-day ${day.isCurrentMonth ? "" : "muted"} ${day.dateText === today ? "today" : ""}" type="button" data-calendar-date="${day.dateText}" ${day.isCurrentMonth ? "" : "disabled"}>
+                  <span>${day.dayNumber}</span>
+                </button>
+              `,
+            )
+            .join("")}
         </div>
-      </button>
+        <div class="calendar-week-bars">
+          ${segments.map((segment) => calendarEventHtml(segment.item, segment)).join("")}
+        </div>
+      </section>
     `;
   }).join("");
 }
@@ -2638,8 +3355,8 @@ function renderSchedule() {
   els.scheduleStartDate.value = state.schedule.startDate;
   els.scheduleOwner.value = state.schedule.owner;
   els.scheduleScope.value = state.schedule.scope || "current";
-  els.scheduleTradeFilter.innerHTML = [`<option>All trades</option>`, ...scheduleTrades.map((trade) => `<option>${trade}</option>`)].join("");
-  els.scheduleTradeFilter.value = state.schedule.tradeFilter || "All trades";
+  els.scheduleTradeFilter.innerHTML = scheduleTradeFilterOptionsHtml(state.schedule.tradeFilter);
+  els.scheduleTradeFilter.value = normalizedScheduleFilterValue(state.schedule.tradeFilter);
   els.scheduleProjectOptions.innerHTML = scheduleProjectOptions()
     .map((option) => `<option value="${escapeAttr(option.projectName)}"></option>`)
     .join("");
@@ -2664,8 +3381,9 @@ function renderSchedule() {
               ${tradeOptionsHtml(item.trade || item.department)}
             </select>
           </td>
-          <td><input data-schedule-field="subtrade" value="${escapeAttr(item.subtrade || "")}" placeholder="Crew or company" /></td>
+          <td><input data-schedule-field="subtrade" value="${escapeAttr(item.subtrade || "")}" placeholder="Subtrade company" /></td>
           <td><input data-schedule-field="targetDate" type="date" value="${item.targetDate || ""}" /></td>
+          <td><input data-schedule-field="endDate" type="date" value="${item.endDate || item.targetDate || ""}" /></td>
           <td>
             <select data-schedule-field="status">
               ${statuses.map((status) => `<option ${item.status === status ? "selected" : ""}>${status}</option>`).join("")}
@@ -2712,13 +3430,14 @@ function renderSchedule() {
     els.scheduleEditTrade.value = selected.trade || selected.department || "Framing";
     els.scheduleEditSubtrade.value = selected.subtrade || "";
     els.scheduleEditDate.value = selected.targetDate || "";
+    els.scheduleEditEndDate.value = selected.endDate || selected.targetDate || "";
     els.scheduleEditStatus.value = selected.status || "Not started";
     els.scheduleEditNotes.value = selected.notes || "";
   }
   els.scheduleEditor.classList.toggle("is-open", Boolean(state.schedule.editorOpen && selected));
 
   const dayItems = state.schedule.dayPopupDate
-    ? calendarItems().filter((item) => item.targetDate === state.schedule.dayPopupDate)
+    ? calendarItems().filter((item) => dateRangeIncludes(state.schedule.dayPopupDate, item.targetDate, item.endDate))
     : [];
   els.scheduleDayPopup.classList.toggle("is-open", Boolean(state.schedule.dayPopupDate && dayItems.length));
   els.scheduleDayPopupTitle.textContent = prettyDate(state.schedule.dayPopupDate);
@@ -2761,6 +3480,9 @@ function handleScheduleEdit(event) {
   const item = state.schedule.items.find((entry) => entry.id === row?.dataset.scheduleItem);
   if (!item || !field) return;
   item[field] = event.target.value;
+  if (field === "trade") item.subtrade = "";
+  if (field === "targetDate" && (!item.endDate || item.endDate < item.targetDate)) item.endDate = item.targetDate;
+  if (field === "endDate" && item.endDate < item.targetDate) item.targetDate = item.endDate;
   if (event.type === "change") renderSchedule();
 }
 
@@ -2786,13 +3508,18 @@ function handleScheduleEditorEdit(event) {
     scheduleEditTrade: "trade",
     scheduleEditSubtrade: "subtrade",
     scheduleEditDate: "targetDate",
+    scheduleEditEndDate: "endDate",
     scheduleEditStatus: "status",
     scheduleEditNotes: "notes",
   };
   const field = fieldMap[event.target.id];
   if (!field) return;
   selected[field] = event.target.value;
+  if (field === "trade") selected.subtrade = "";
+  if (field === "targetDate" && (!selected.endDate || selected.endDate < selected.targetDate)) selected.endDate = selected.targetDate;
+  if (field === "endDate" && selected.endDate < selected.targetDate) selected.targetDate = selected.endDate;
   if (field === "targetDate" && event.target.value) state.schedule.calendarMonth = monthKey(event.target.value);
+  if (field === "endDate" && event.target.value) state.schedule.calendarMonth = monthKey(selected.targetDate || event.target.value);
   if (event.type === "change") renderSchedule();
 }
 
@@ -2829,13 +3556,15 @@ function addScheduleItem() {
 function createScheduleItemOnDate(dateText) {
   ensureSchedule();
   const id = `schedule-${Date.now()}`;
+  const filter = parseScheduleFilter(state.schedule.tradeFilter);
   const item = {
     id,
     name: "New schedule item",
     department: "Production",
-    trade: state.schedule.tradeFilter && state.schedule.tradeFilter !== "All trades" ? state.schedule.tradeFilter : "Framing",
-    subtrade: "",
+    trade: filter.type === "trade" || filter.type === "company" ? filter.trade : "Framing",
+    subtrade: filter.type === "company" ? filter.company : "",
     targetDate: dateText,
+    endDate: dateText,
     status: "Not started",
     notes: "",
   };
@@ -2847,7 +3576,7 @@ function createScheduleItemOnDate(dateText) {
 
 function selectScheduleDate(dateText) {
   if (!dateText) return;
-  const item = state.schedule.items.find((entry) => entry.targetDate === dateText);
+  const item = state.schedule.items.find((entry) => dateRangeIncludes(dateText, entry.targetDate, entry.endDate));
   if (!item) return;
   state.schedule.selectedItemId = item.id;
   state.schedule.editorOpen = true;
@@ -2868,11 +3597,32 @@ function deleteSelectedScheduleItem() {
 function hasPermission(view) {
   const user = state.auth.currentUser;
   if (!user) return false;
+  if (view === "management") return canViewManagement(user);
   return user.permissions.includes("all") || user.permissions.includes(view);
 }
 
+function canViewManagement(user = state.auth.currentUser) {
+  if (!user) return false;
+  return user.role === "Owner" || user.role === "Management" || user.permissions.includes("all") || user.permissions.includes("management");
+}
+
 function firstAllowedView() {
-  return ["crm", "management", "estimate", "output", "contract", "tasks", "schedule", "selections", "allowances", "review"].find((view) => hasPermission(view)) || "crm";
+  return ["crm", "management", "estimate", "output", "contract", "tasks", "schedule", "vendors", "jobFiles", "warranty", "billingStages", "purchaseOrders", "changeOrders", "selections", "allowances", "review"].find((view) => hasPermission(view)) || "crm";
+}
+
+function syncNavGroups(view = state.view) {
+  const groupViews = {
+    sales: ["estimate", "output", "contract", "review"],
+    projectManagement: ["schedule", "selections", "vendors", "jobFiles", "warranty"],
+    financial: ["billingStages", "purchaseOrders", "changeOrders", "allowances"],
+  };
+  document.querySelectorAll("[data-nav-group]").forEach((group) => {
+    if (groupViews[group.dataset.navGroup]?.includes(view)) {
+      group.classList.remove("collapsed");
+    }
+    const toggle = document.querySelector(`[data-nav-group-toggle="${group.dataset.navGroup}"]`);
+    if (toggle) toggle.setAttribute("aria-expanded", String(!group.classList.contains("collapsed")));
+  });
 }
 
 function loadAuthSession() {
@@ -2930,7 +3680,7 @@ function managementRecords() {
   return records;
 }
 
-const managementOpenStatuses = ["New", "Contacted", "Needs Estimate", "Estimate In Progress", "Quote Sent", "Follow-up"];
+const managementOpenStatuses = ["New", "Contacted", "Needs Estimate", "Estimate In Progress", "Quote Sent", "Follow-up", "Under Construction"];
 
 function managementBreakdownRecords(breakdown) {
   const records = managementRecords();
@@ -3010,7 +3760,7 @@ function renderManagement() {
   els.mgmtWonLeads.textContent = String(won.length);
   els.mgmtPipelineValue.textContent = money.format(pipelineValue);
 
-  const statusCounts = ["New", "Contacted", "Needs Estimate", "Estimate In Progress", "Quote Sent", "Follow-up", "Won", "Lost"].map((status) => ({
+  const statusCounts = ["New", "Contacted", "Needs Estimate", "Estimate In Progress", "Quote Sent", "Follow-up", "Won", "Under Construction", "Lost"].map((status) => ({
     status,
     count: records.filter((record) => record.status === status).length,
   }));
@@ -3081,6 +3831,11 @@ function render() {
   renderProjectTasks();
   renderSchedule();
   renderSelections();
+  renderVendors();
+  renderJobFiles();
+  renderWarranty();
+  renderPurchaseOrders();
+  renderChangeOrders();
   renderEstimateOutput();
   renderContract();
   renderManagement();
@@ -3098,6 +3853,7 @@ function setView(view) {
   document.querySelectorAll(".nav-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
   });
+  syncNavGroups(view);
   document.querySelectorAll(".view").forEach((section) => {
     section.classList.toggle("active", section.id === `${view}View`);
   });
@@ -3107,8 +3863,14 @@ function setView(view) {
     management: "Management Dashboard",
     output: "Estimate Proposal",
     contract: "Contract",
-    tasks: "Project Tasks",
+    tasks: "To-Dos",
     schedule: "Scheduling",
+    vendors: "Vendor/Subtrade Management",
+    jobFiles: "Files & Photos",
+    warranty: "Warranty",
+    billingStages: "Billing Stages",
+    purchaseOrders: "Purchase Orders",
+    changeOrders: "Change Orders",
     selections: "Project Info",
     allowances: "Allowances",
     review: "Estimate Review",
@@ -3209,8 +3971,678 @@ function handleAllowanceEdit(event) {
   const field = event.target.dataset.allowanceField;
   if (!record || !field) return true;
   record[field] = field === "actual" ? event.target.value : event.target.value;
-  renderAllowances();
+  if (field === "actual") {
+    updateAllowanceTotals();
+  } else if (event.type === "change") {
+    renderAllowances();
+  }
   return true;
+}
+
+function orderTradeOptionsHtml(selected) {
+  const options = ["Project Materials", ...scheduleTrades.filter((trade) => !["Sales", "Office", "Accounting"].includes(trade))];
+  return options.map((trade) => `<option ${selected === trade ? "selected" : ""}>${escapeAttr(trade)}</option>`).join("");
+}
+
+function vendorTradeOptionsHtml(selected = "Project Materials") {
+  const options = ["Project Materials", ...scheduleTrades.filter((trade) => !["Sales", "Office"].includes(trade))];
+  return options.map((trade) => `<option ${selected === trade ? "selected" : ""}>${escapeAttr(trade)}</option>`).join("");
+}
+
+function normalizeVendors(items) {
+  const source = Array.isArray(items) ? items : [];
+  return source
+    .filter((item) => item?.company)
+    .map((item, index) => ({
+      id: item.id || `vendor-${Date.now()}-${index}`,
+      company: item.company || "",
+      type: item.type || "Subtrade",
+      trade: item.trade || "Project Materials",
+      contact: item.contact || "",
+      phone: item.phone || "",
+      email: item.email || "",
+      status: item.status || "Active",
+      notes: item.notes || "",
+    }));
+}
+
+function loadVendors() {
+  if (!storageAvailable()) return;
+  try {
+    state.vendors = normalizeVendors(JSON.parse(window.localStorage.getItem("zaksBuildOsVendors") || "[]"));
+  } catch {
+    state.vendors = [];
+  }
+}
+
+function persistVendors() {
+  if (!storageAvailable()) return;
+  window.localStorage.setItem("zaksBuildOsVendors", JSON.stringify(normalizeVendors(state.vendors)));
+}
+
+function renderVendors() {
+  if (!els.vendorsBody) return;
+  state.vendors = normalizeVendors(state.vendors);
+  els.vendorTrade.innerHTML = vendorTradeOptionsHtml(els.vendorTrade.value || "Project Materials");
+  const tradeFilter = els.vendorTradeFilter.value || "All trades";
+  els.vendorTradeFilter.innerHTML = [
+    `<option>All trades</option>`,
+    ...["Project Materials", ...scheduleTrades.filter((trade) => !["Sales", "Office"].includes(trade))].map(
+      (trade) => `<option ${trade === tradeFilter ? "selected" : ""}>${escapeAttr(trade)}</option>`,
+    ),
+  ].join("");
+  const search = (els.vendorSearch.value || "").trim().toLowerCase();
+  const rows = state.vendors.filter((vendor) => {
+    const tradeMatch = tradeFilter === "All trades" || vendor.trade === tradeFilter;
+    const text = `${vendor.company} ${vendor.type} ${vendor.trade} ${vendor.contact} ${vendor.phone} ${vendor.email} ${vendor.status} ${vendor.notes}`.toLowerCase();
+    return tradeMatch && (!search || text.includes(search));
+  });
+  els.vendorCount.textContent = String(state.vendors.length);
+  els.subtradeCount.textContent = String(state.vendors.filter((vendor) => vendor.type === "Subtrade").length);
+  els.materialVendorCount.textContent = String(state.vendors.filter((vendor) => vendor.type !== "Subtrade").length);
+  els.vendorsBody.innerHTML = rows.length
+    ? rows
+        .map(
+          (vendor) => `
+            <tr class="vendor-directory-row ${state.selectedVendorId === vendor.id ? "selected" : ""}" data-select-vendor="${vendor.id}">
+              <td><strong>${escapeAttr(vendor.company)}</strong></td>
+              <td>${escapeAttr(vendor.type)}</td>
+              <td>${escapeAttr(vendor.trade)}</td>
+              <td>${escapeAttr(vendor.contact || "-")}</td>
+              <td>${escapeAttr(vendor.phone || "-")}</td>
+              <td>${escapeAttr(vendor.email || "-")}</td>
+              <td>${escapeAttr(vendor.status)}</td>
+              <td>${escapeAttr(vendor.notes || "-")}</td>
+              <td><button class="danger-button vendor-delete-btn" type="button" data-delete-vendor="${vendor.id}">Delete</button></td>
+            </tr>
+          `,
+        )
+        .join("")
+    : `<tr><td colspan="9">No vendors or subtrades found.</td></tr>`;
+  els.addVendorBtn.textContent = state.selectedVendorId ? "Update company" : "Add company";
+}
+
+function addVendor() {
+  const company = els.vendorCompany.value.trim();
+  if (!company) return;
+  const values = {
+    company,
+    type: els.vendorType.value || "Subtrade",
+    trade: els.vendorTrade.value || "Project Materials",
+    contact: els.vendorContact.value.trim(),
+    phone: els.vendorPhone.value.trim(),
+    email: els.vendorEmail.value.trim(),
+    status: els.vendorStatus.value || "Active",
+    notes: els.vendorNotes.value.trim(),
+  };
+  const existing = state.vendors.find((vendor) => vendor.id === state.selectedVendorId);
+  if (existing) {
+    Object.assign(existing, values);
+  } else {
+    state.vendors.unshift({
+      id: `vendor-${Date.now()}`,
+      ...values,
+    });
+  }
+  clearVendorForm();
+  persistVendors();
+  renderVendors();
+  renderSchedule();
+}
+
+function selectVendor(vendorId) {
+  const vendor = state.vendors.find((item) => item.id === vendorId);
+  if (!vendor) return;
+  state.selectedVendorId = vendor.id;
+  els.vendorCompany.value = vendor.company;
+  els.vendorType.value = vendor.type;
+  els.vendorTrade.innerHTML = vendorTradeOptionsHtml(vendor.trade);
+  els.vendorContact.value = vendor.contact;
+  els.vendorPhone.value = vendor.phone;
+  els.vendorEmail.value = vendor.email;
+  els.vendorStatus.value = vendor.status;
+  els.vendorNotes.value = vendor.notes;
+  renderVendors();
+}
+
+function clearVendorForm() {
+  state.selectedVendorId = "";
+  ["vendorCompany", "vendorContact", "vendorPhone", "vendorEmail", "vendorNotes"].forEach((id) => (els[id].value = ""));
+  els.vendorType.value = "Subtrade";
+  els.vendorTrade.innerHTML = vendorTradeOptionsHtml("Project Materials");
+  els.vendorStatus.value = "Active";
+}
+
+function deleteVendor(vendorId) {
+  state.vendors = state.vendors.filter((vendor) => vendor.id !== vendorId);
+  if (state.selectedVendorId === vendorId) clearVendorForm();
+  persistVendors();
+  renderVendors();
+  renderSchedule();
+}
+
+function renderPurchaseOrders() {
+  if (!els.purchaseOrdersBody) return;
+  state.purchaseOrders = normalizePurchaseOrders(state.purchaseOrders);
+  if (state.selectedPurchaseOrderId && !state.purchaseOrders.some((order) => order.id === state.selectedPurchaseOrderId)) state.selectedPurchaseOrderId = "";
+  els.purchaseOrderTrade.innerHTML = orderTradeOptionsHtml(els.purchaseOrderTrade.value || "Project Materials");
+  const openTotal = state.purchaseOrders
+    .filter((item) => !["Received", "Closed"].includes(item.status))
+    .reduce((sum, item) => sum + num(item.amount), 0);
+  const issuedTotal = state.purchaseOrders
+    .filter((item) => ["Issued", "Received", "Closed"].includes(item.status))
+    .reduce((sum, item) => sum + num(item.amount), 0);
+  els.purchaseOrderCount.textContent = String(state.purchaseOrders.length);
+  els.purchaseOrderOpenTotal.textContent = money.format(openTotal);
+  els.purchaseOrderIssuedTotal.textContent = money.format(issuedTotal);
+  els.purchaseOrdersBody.innerHTML = state.purchaseOrders.length
+    ? state.purchaseOrders
+        .map(
+          (item) => `
+            <tr class="order-directory-row ${state.selectedPurchaseOrderId === item.id ? "selected" : ""}" data-select-purchase-order="${item.id}">
+              <td>${escapeAttr(item.number)}</td>
+              <td>${escapeAttr(item.vendor || "-")}</td>
+              <td>${escapeAttr(item.trade || "-")}</td>
+              <td>${money.format(num(item.amount))}</td>
+              <td>${escapeAttr(item.neededDate || "-")}</td>
+              <td>${escapeAttr(item.status || "Draft")}</td>
+              <td>${escapeAttr(item.notes || "-")}</td>
+            </tr>
+          `,
+        )
+        .join("")
+    : `<tr><td colspan="7">No purchase orders yet.</td></tr>`;
+  els.addPurchaseOrderBtn.textContent = state.selectedPurchaseOrderId ? "Update purchase order" : "Add purchase order";
+}
+
+function renderChangeOrders() {
+  if (!els.changeOrdersBody) return;
+  state.changeOrders = normalizeChangeOrders(state.changeOrders);
+  if (state.selectedChangeOrderId && !state.changeOrders.some((order) => order.id === state.selectedChangeOrderId)) state.selectedChangeOrderId = "";
+  if (els.changeOrderDate && !els.changeOrderDate.value) els.changeOrderDate.value = todayIso();
+  const pendingTotal = state.changeOrders
+    .filter((item) => !["Approved", "Rejected", "Invoiced"].includes(item.status))
+    .reduce((sum, item) => sum + num(item.amount), 0);
+  const approvedTotal = state.changeOrders
+    .filter((item) => ["Approved", "Invoiced"].includes(item.status))
+    .reduce((sum, item) => sum + num(item.amount), 0);
+  els.changeOrderCount.textContent = String(state.changeOrders.length);
+  els.changeOrderPendingTotal.textContent = money.format(pendingTotal);
+  els.changeOrderApprovedTotal.textContent = money.format(approvedTotal);
+  els.changeOrdersBody.innerHTML = state.changeOrders.length
+    ? state.changeOrders
+        .map(
+          (item) => `
+            <tr class="order-directory-row ${state.selectedChangeOrderId === item.id ? "selected" : ""}" data-select-change-order="${item.id}">
+              <td>${escapeAttr(item.number)}</td>
+              <td>${escapeAttr(item.title || "-")}</td>
+              <td>${escapeAttr(item.requestedBy || "-")}</td>
+              <td>${money.format(num(item.amount))}</td>
+              <td>${escapeAttr(item.date || "-")}</td>
+              <td>${escapeAttr(item.status || "Draft")}</td>
+              <td>${escapeAttr(item.description || "-")}</td>
+            </tr>
+          `,
+        )
+        .join("")
+    : `<tr><td colspan="7">No change orders yet.</td></tr>`;
+  els.addChangeOrderBtn.textContent = state.selectedChangeOrderId ? "Update change order" : "Add change order";
+}
+
+function addPurchaseOrder() {
+  const values = {
+    vendor: els.purchaseOrderVendor.value.trim(),
+    trade: els.purchaseOrderTrade.value || "Project Materials",
+    amount: els.purchaseOrderAmount.value,
+    neededDate: els.purchaseOrderNeededDate.value,
+    status: els.purchaseOrderStatus.value || "Draft",
+    notes: els.purchaseOrderNotes.value.trim(),
+  };
+  const existing = state.purchaseOrders.find((order) => order.id === state.selectedPurchaseOrderId);
+  if (existing) {
+    Object.assign(existing, values);
+  } else {
+    const nextNumber = `PO-${String(state.purchaseOrders.length + 1).padStart(3, "0")}`;
+    state.purchaseOrders.push({
+      id: `po-${Date.now()}`,
+      number: nextNumber,
+      ...values,
+    });
+  }
+  clearPurchaseOrderForm();
+  renderPurchaseOrders();
+  saveActiveCrmRecordEdits();
+}
+
+function addChangeOrder() {
+  const values = {
+    title: els.changeOrderTitle.value.trim(),
+    requestedBy: els.changeOrderRequestedBy.value.trim(),
+    amount: els.changeOrderAmount.value,
+    date: els.changeOrderDate.value || todayIso(),
+    status: els.changeOrderStatus.value || "Draft",
+    description: els.changeOrderDescription.value.trim(),
+  };
+  const existing = state.changeOrders.find((order) => order.id === state.selectedChangeOrderId);
+  if (existing) {
+    Object.assign(existing, values);
+  } else {
+    const nextNumber = `CO-${String(state.changeOrders.length + 1).padStart(3, "0")}`;
+    state.changeOrders.push({
+      id: `co-${Date.now()}`,
+      number: nextNumber,
+      ...values,
+    });
+  }
+  clearChangeOrderForm();
+  renderChangeOrders();
+  saveActiveCrmRecordEdits();
+}
+
+function selectPurchaseOrder(orderId) {
+  const order = state.purchaseOrders.find((item) => item.id === orderId);
+  if (!order) return;
+  state.selectedPurchaseOrderId = order.id;
+  els.purchaseOrderVendor.value = order.vendor;
+  els.purchaseOrderTrade.innerHTML = orderTradeOptionsHtml(order.trade);
+  els.purchaseOrderAmount.value = order.amount;
+  els.purchaseOrderNeededDate.value = order.neededDate;
+  els.purchaseOrderStatus.value = order.status;
+  els.purchaseOrderNotes.value = order.notes;
+  renderPurchaseOrders();
+}
+
+function clearPurchaseOrderForm() {
+  state.selectedPurchaseOrderId = "";
+  els.purchaseOrderVendor.value = "";
+  els.purchaseOrderTrade.innerHTML = orderTradeOptionsHtml("Project Materials");
+  els.purchaseOrderAmount.value = "";
+  els.purchaseOrderNeededDate.value = "";
+  els.purchaseOrderStatus.value = "Draft";
+  els.purchaseOrderNotes.value = "";
+}
+
+function selectChangeOrder(orderId) {
+  const order = state.changeOrders.find((item) => item.id === orderId);
+  if (!order) return;
+  state.selectedChangeOrderId = order.id;
+  els.changeOrderTitle.value = order.title;
+  els.changeOrderRequestedBy.value = order.requestedBy;
+  els.changeOrderAmount.value = order.amount;
+  els.changeOrderDate.value = order.date || todayIso();
+  els.changeOrderStatus.value = order.status;
+  els.changeOrderDescription.value = order.description;
+  renderChangeOrders();
+}
+
+function clearChangeOrderForm() {
+  state.selectedChangeOrderId = "";
+  els.changeOrderTitle.value = "";
+  els.changeOrderRequestedBy.value = "";
+  els.changeOrderAmount.value = "";
+  els.changeOrderDate.value = todayIso();
+  els.changeOrderStatus.value = "Draft";
+  els.changeOrderDescription.value = "";
+}
+
+function handlePurchaseOrderEdit(event) {
+  const row = event.target.closest("[data-purchase-order]");
+  const field = event.target.dataset.purchaseOrderField;
+  const item = state.purchaseOrders.find((order) => order.id === row?.dataset.purchaseOrder);
+  if (!item || !field) return;
+  item[field] = event.target.value;
+  if (event.type === "change") renderPurchaseOrders();
+  saveActiveCrmRecordEdits();
+}
+
+function handleChangeOrderEdit(event) {
+  const row = event.target.closest("[data-change-order]");
+  const field = event.target.dataset.changeOrderField;
+  const item = state.changeOrders.find((order) => order.id === row?.dataset.changeOrder);
+  if (!item || !field) return;
+  item[field] = event.target.value;
+  if (event.type === "change") renderChangeOrders();
+  saveActiveCrmRecordEdits();
+}
+
+function renderJobFiles() {
+  if (!els.jobFilesList) return;
+  state.jobFiles = normalizeJobFiles(state.jobFiles);
+  renderJobFileProjectControls();
+  const records = jobFileProjectRecords();
+  const selectedProjectId = els.jobFileProjectFilter?.value || currentJobFileProjectId();
+  const visibleFiles = records
+    .filter((record) => selectedProjectId === "all" || record.id === selectedProjectId)
+    .flatMap((record) =>
+      normalizeJobFiles(record.jobFiles).map((file) => ({
+        ...file,
+        projectId: record.id,
+        projectName: record.projectName,
+        customerName: record.customerName,
+      })),
+    );
+  const photos = visibleFiles.filter(isJobFileImage);
+  const totalSize = visibleFiles.reduce((sum, file) => sum + num(file.size), 0);
+  els.jobFileCount.textContent = String(visibleFiles.length);
+  els.jobPhotoCount.textContent = String(photos.length);
+  els.jobFileTotalSize.textContent = formatFileSize(totalSize);
+  els.jobFilesList.innerHTML = visibleFiles.length
+    ? visibleFiles
+        .map((file) => {
+          const uploaded = new Date(file.uploadedAt).toLocaleString("en-CA");
+          const isImage = isJobFileImage(file);
+          const isPdf = isJobFilePdf(file);
+          const canPreview = isPreviewableJobFile(file);
+          return `
+            <article class="job-file-card" data-job-file="${file.id}" data-job-file-project="${escapeAttr(file.projectId)}">
+              ${
+                canPreview
+                  ? `<button class="job-file-preview-trigger" type="button" data-preview-job-file="${escapeAttr(file.id)}" data-job-file-project="${escapeAttr(file.projectId)}" aria-label="Preview ${escapeAttr(file.name)}">
+                      ${
+                        isImage && file.dataUrl
+                          ? `<img src="${file.dataUrl}" alt="${escapeAttr(file.name)}" />`
+                          : `<div class="job-file-icon pdf-file-icon">PDF</div>`
+                      }
+                    </button>`
+                  : `<div class="job-file-icon">FILE</div>`
+              }
+              <div class="job-file-details">
+                <button class="job-file-name-button" type="button" data-preview-job-file="${escapeAttr(file.id)}" data-job-file-project="${escapeAttr(file.projectId)}" ${canPreview ? "" : "disabled"}>${escapeAttr(file.name)}</button>
+                <span class="job-file-project-badge">${escapeAttr(file.projectName || "Current job")}</span>
+                <span>${escapeAttr(file.customerName || "No customer")} - ${escapeAttr(file.type || "File")} - ${formatFileSize(file.size)} - ${escapeAttr(uploaded)}</span>
+                <label>
+                  Attached job
+                  <select data-job-file-project-picker>
+                    ${jobFileProjectOptionsHtml(file.projectId, false)}
+                  </select>
+                </label>
+                <label>
+                  Description
+                  <textarea data-job-file-field="description" rows="3" placeholder="Add description">${escapeAttr(file.description)}</textarea>
+                </label>
+                <div class="job-file-actions">
+                  <a class="secondary file-download-link" href="${file.dataUrl}" download="${escapeAttr(file.name)}">Download</a>
+                  ${canPreview ? `<button class="secondary" type="button" data-preview-job-file="${escapeAttr(file.id)}" data-job-file-project="${escapeAttr(file.projectId)}">Preview</button>` : ""}
+                  <button class="danger-button" type="button" data-delete-job-file="${escapeAttr(file.id)}">Delete</button>
+                </div>
+              </div>
+            </article>
+          `;
+        })
+        .join("")
+    : `<p class="empty-note">No files uploaded for this job yet.</p>`;
+}
+
+function currentJobFileProjectId() {
+  return state.crm.activeRecordId || "current";
+}
+
+function jobFileProjectRecords() {
+  const current = {
+    id: currentJobFileProjectId(),
+    projectName: currentProjectName(),
+    customerName: els.customerName?.value || "New Customer",
+    jobFiles: state.jobFiles,
+    current: true,
+  };
+  const saved = state.crm.records
+    .filter((record) => record.id !== state.crm.activeRecordId)
+    .map((record) => ({
+      id: record.id,
+      projectName: record.projectName || "Untitled project",
+      customerName: record.customerName || "No customer",
+      jobFiles: record.jobFiles || [],
+      current: false,
+    }));
+  return [current, ...saved];
+}
+
+function jobFileProjectOptionsHtml(selectedId = currentJobFileProjectId(), includeAll = false) {
+  const options = jobFileProjectRecords();
+  return [
+    includeAll ? `<option value="all" ${selectedId === "all" ? "selected" : ""}>All jobs</option>` : "",
+    ...options.map(
+      (option) =>
+        `<option value="${escapeAttr(option.id)}" ${option.id === selectedId ? "selected" : ""}>${escapeAttr(option.projectName)}${option.customerName ? ` - ${escapeAttr(option.customerName)}` : ""}</option>`,
+    ),
+  ].join("");
+}
+
+function renderJobFileProjectControls() {
+  const currentId = currentJobFileProjectId();
+  if (els.jobFileProject) {
+    const selected = jobFileProjectRecords().some((record) => record.id === els.jobFileProject.value) ? els.jobFileProject.value : currentId;
+    els.jobFileProject.innerHTML = jobFileProjectOptionsHtml(selected, false);
+  }
+  if (els.jobFileProjectFilter) {
+    const selected = els.jobFileProjectFilter.value || currentId;
+    const valid = selected === "all" || jobFileProjectRecords().some((record) => record.id === selected);
+    els.jobFileProjectFilter.innerHTML = jobFileProjectOptionsHtml(valid ? selected : currentId, true);
+  }
+}
+
+function findJobFileTarget(projectId) {
+  if (!projectId || projectId === currentJobFileProjectId()) {
+    return {
+      record: null,
+      files: state.jobFiles,
+      save() {
+        saveActiveCrmRecordEdits();
+      },
+    };
+  }
+  const record = state.crm.records.find((item) => item.id === projectId);
+  if (!record) return null;
+  record.jobFiles = normalizeJobFiles(record.jobFiles);
+  return {
+    record,
+    files: record.jobFiles,
+    save() {
+      persistCrmRecords();
+    },
+  };
+}
+
+function findJobFile(fileId, projectId = state.openJobFilePreviewProjectId || currentJobFileProjectId()) {
+  const target = findJobFileTarget(projectId);
+  return target?.files.find((item) => item.id === fileId);
+}
+
+function moveJobFileToProject(fileId, fromProjectId, toProjectId) {
+  if (!fileId || !toProjectId || fromProjectId === toProjectId) return;
+  const source = findJobFileTarget(fromProjectId);
+  const destination = findJobFileTarget(toProjectId);
+  if (!source || !destination) return;
+  const fileIndex = source.files.findIndex((item) => item.id === fileId);
+  if (fileIndex < 0) return;
+  const [file] = source.files.splice(fileIndex, 1);
+  const destinationRecord = jobFileProjectRecords().find((record) => record.id === toProjectId);
+  file.projectId = toProjectId;
+  file.projectName = destinationRecord?.projectName || "";
+  destination.files.unshift(file);
+  source.save();
+  if (destination !== source) destination.save();
+  if (state.openJobFilePreviewId === fileId && state.openJobFilePreviewProjectId === fromProjectId) {
+    state.openJobFilePreviewProjectId = toProjectId;
+  }
+  renderJobFiles();
+  renderJobFilePreview();
+}
+
+function isJobFileImage(file) {
+  const name = file?.name?.toLowerCase() || "";
+  const dataUrl = file?.dataUrl || "";
+  return Boolean(file?.type?.startsWith("image/") || dataUrl.startsWith("data:image/") || /\.(avif|bmp|gif|heic|heif|jpe?g|png|svg|webp)$/.test(name));
+}
+
+function isJobFilePdf(file) {
+  const dataUrl = file?.dataUrl || "";
+  return Boolean(file?.type === "application/pdf" || dataUrl.startsWith("data:application/pdf") || file?.name?.toLowerCase().endsWith(".pdf"));
+}
+
+function isPreviewableJobFile(file) {
+  return Boolean(file?.dataUrl && (isJobFileImage(file) || isJobFilePdf(file)));
+}
+
+function openJobFilePreview(fileId, projectId = currentJobFileProjectId()) {
+  const file = findJobFile(fileId, projectId);
+  if (!isPreviewableJobFile(file)) return;
+  state.openJobFilePreviewId = fileId;
+  state.openJobFilePreviewProjectId = projectId;
+  renderJobFilePreview();
+}
+
+function closeJobFilePreview() {
+  state.openJobFilePreviewId = "";
+  state.openJobFilePreviewProjectId = "";
+  renderJobFilePreview();
+}
+
+function revokeJobFilePreviewObjectUrl() {
+  if (!state.jobFilePreviewObjectUrl) return;
+  URL.revokeObjectURL(state.jobFilePreviewObjectUrl);
+  state.jobFilePreviewObjectUrl = "";
+}
+
+function dataUrlToBlobUrl(dataUrl, fallbackType = "application/octet-stream") {
+  const { bytes, mime } = dataUrlToBytes(dataUrl, fallbackType);
+  return URL.createObjectURL(new Blob([bytes], { type: mime }));
+}
+
+function dataUrlToBytes(dataUrl, fallbackType = "application/octet-stream") {
+  const [header = "", body = ""] = String(dataUrl).split(",");
+  const mime = header.match(/^data:([^;]+)/)?.[1] || fallbackType;
+  const isBase64 = header.includes(";base64");
+  const binary = isBase64 ? atob(body) : decodeURIComponent(body);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return { bytes, mime };
+}
+
+async function renderPdfJobFile(file, renderToken) {
+  els.jobFilePreviewBody.innerHTML = `<p class="empty-note">Loading PDF preview...</p>`;
+  try {
+    const pdfjs = await import("./assets/pdf.legacy.min.js");
+    pdfjs.GlobalWorkerOptions.workerSrc = "./assets/pdf.legacy.worker.min.js";
+    const { bytes } = dataUrlToBytes(file.dataUrl, "application/pdf");
+    const pdf = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise;
+    if (renderToken !== state.jobFilePreviewRenderToken) return;
+    els.jobFilePreviewBody.innerHTML = "";
+    els.jobFilePreviewBody.classList.add("pdf-pages");
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      if (renderToken !== state.jobFilePreviewRenderToken) return;
+      const viewport = page.getViewport({ scale: 1.35 });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      canvas.setAttribute("aria-label", `${file.name || "PDF"} page ${pageNumber}`);
+      els.jobFilePreviewBody.append(canvas);
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+    }
+  } catch (error) {
+    console.warn("PDF preview failed", error);
+    if (renderToken !== state.jobFilePreviewRenderToken) return;
+    els.jobFilePreviewBody.innerHTML = `<p class="empty-note">PDF preview is not available in this browser. Use Download to open the file.</p>`;
+  }
+}
+
+function renderJobFilePreview() {
+  if (!els.jobFilePreviewModal || !els.jobFilePreviewBody) return;
+  const file = findJobFile(state.openJobFilePreviewId, state.openJobFilePreviewProjectId);
+  const canPreview = isPreviewableJobFile(file);
+  state.jobFilePreviewRenderToken += 1;
+  const renderToken = state.jobFilePreviewRenderToken;
+  revokeJobFilePreviewObjectUrl();
+  els.jobFilePreviewBody.classList.remove("pdf-pages");
+  els.jobFilePreviewModal.toggleAttribute("hidden", !canPreview);
+  if (!canPreview) {
+    els.jobFilePreviewBody.innerHTML = "";
+    els.jobFilePreviewDownload?.removeAttribute("href");
+    els.jobFilePreviewDownload?.removeAttribute("download");
+    return;
+  }
+  els.jobFilePreviewTitle.textContent = file.name || "File";
+  els.jobFilePreviewDownload.href = file.dataUrl;
+  els.jobFilePreviewDownload.download = file.name || "job-file";
+  els.jobFilePreviewBody.innerHTML = "";
+  if (isJobFileImage(file)) {
+    const image = document.createElement("img");
+    image.src = file.dataUrl;
+    image.alt = file.name || "Job photo";
+    els.jobFilePreviewBody.append(image);
+    return;
+  }
+  renderPdfJobFile(file, renderToken);
+}
+
+async function addJobFiles() {
+  const files = Array.from(els.jobFileInput.files || []);
+  if (!files.length) {
+    els.jobFileUploadNote.textContent = "Choose one or more files first.";
+    return;
+  }
+  const projectId = els.jobFileProject?.value || currentJobFileProjectId();
+  const target = findJobFileTarget(projectId);
+  if (!target) {
+    els.jobFileUploadNote.textContent = "Choose a valid job before uploading.";
+    return;
+  }
+  const projectLabel =
+    projectId === currentJobFileProjectId()
+      ? currentProjectName()
+      : state.crm.records.find((record) => record.id === projectId)?.projectName || "selected job";
+  els.jobFileUploadNote.textContent = `Uploading files into ${projectLabel}...`;
+  try {
+    const description = els.jobFileDescription.value.trim();
+    const records = await Promise.all(
+      files.map(async (file) => ({
+        id: `file-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        name: file.name,
+        type: file.type || "application/octet-stream",
+        size: file.size,
+        uploadedAt: new Date().toISOString(),
+        description,
+        projectId,
+        projectName: projectLabel,
+        dataUrl: await readFileAsDataUrl(file),
+      })),
+    );
+    target.files.unshift(...records);
+    els.jobFileInput.value = "";
+    els.jobFileDescription.value = "";
+    els.jobFileUploadNote.textContent = `${records.length} file${records.length === 1 ? "" : "s"} added.`;
+    renderJobFiles();
+    target.save();
+  } catch (error) {
+    els.jobFileUploadNote.textContent = `Upload failed: ${error.message}`;
+  }
+}
+
+function handleJobFileEdit(event) {
+  const row = event.target.closest("[data-job-file]");
+  const projectPicker = event.target.closest("[data-job-file-project-picker]");
+  if (projectPicker) {
+    moveJobFileToProject(row?.dataset.jobFile, row?.dataset.jobFileProject, projectPicker.value);
+    return;
+  }
+  const field = event.target.dataset.jobFileField;
+  const target = findJobFileTarget(row?.dataset.jobFileProject);
+  const file = target?.files.find((item) => item.id === row?.dataset.jobFile);
+  if (!file || !field) return;
+  file[field] = event.target.value;
+  target.save();
+}
+
+function deleteJobFile(fileId, projectId = currentJobFileProjectId()) {
+  if (state.openJobFilePreviewId === fileId && state.openJobFilePreviewProjectId === projectId) closeJobFilePreview();
+  const target = findJobFileTarget(projectId);
+  if (!target) return;
+  const nextFiles = target.files.filter((file) => file.id !== fileId);
+  if (target.record) target.record.jobFiles = nextFiles;
+  else state.jobFiles = nextFiles;
+  renderJobFiles();
+  target.save();
 }
 
 function handleRatePick(event) {
@@ -3235,6 +4667,10 @@ function exportSummary() {
     ["PST", money.format(totals.pst)],
     ["GST", money.format(totals.gst)],
     ["Total", money.format(totals.total)],
+    ...createBillingStages(state.crm.billingStages).map((stage) => [
+      `${stage.group} - ${stage.label}`,
+      [stage.status, stage.amount ? money.format(num(stage.amount)) : "", stage.completedDate, stage.notes].filter(Boolean).join(" | ") || "Not started",
+    ]),
   ];
   const text = rows.map((row) => row.join(",")).join("\n");
   navigator.clipboard?.writeText(text);
@@ -3283,6 +4719,7 @@ function normalizeSchedule(schedule) {
     trade: item.trade || item.department || "Production",
     subtrade: item.subtrade || "",
     targetDate: item.targetDate || normalized.startDate,
+    endDate: item.endDate || item.targetDate || normalized.startDate,
     status: item.status || "Not started",
     notes: item.notes || "",
   }));
@@ -3303,6 +4740,104 @@ function normalizeTasks(tasks) {
       status: task.status || (done ? "Complete" : "Open"),
       notes: task.notes || "",
     };
+  });
+}
+
+function createBillingStages(source = []) {
+  const saved = Array.isArray(source) ? source : [];
+  return billingStageTemplate.map((stage) => {
+    const match = saved.find((item) => item.id === stage.id || item.label === stage.label);
+    const completed = Boolean(match?.completed);
+    const status = billingStageStatuses.includes(match?.status)
+      ? match.status
+      : completed
+        ? "Complete"
+        : "Not started";
+    return {
+      ...stage,
+      completed: status !== "Not started" || completed,
+      completedDate: match?.completedDate || "",
+      amount: match?.amount || "",
+      status,
+      notes: match?.notes || "",
+    };
+  });
+}
+
+function normalizePurchaseOrders(items) {
+  const source = Array.isArray(items) ? items : [];
+  return source.map((item, index) => ({
+    id: item.id || `po-${Date.now()}-${index}`,
+    number: item.number || `PO-${String(index + 1).padStart(3, "0")}`,
+    vendor: item.vendor || "",
+    trade: item.trade || "Project Materials",
+    amount: item.amount || "",
+    neededDate: item.neededDate || "",
+    status: item.status || "Draft",
+    notes: item.notes || "",
+  }));
+}
+
+function normalizeChangeOrders(items) {
+  const source = Array.isArray(items) ? items : [];
+  return source.map((item, index) => ({
+    id: item.id || `co-${Date.now()}-${index}`,
+    number: item.number || `CO-${String(index + 1).padStart(3, "0")}`,
+    title: item.title || "",
+    requestedBy: item.requestedBy || "",
+    amount: item.amount || "",
+    date: item.date || todayIso(),
+    status: item.status || "Draft",
+    description: item.description || "",
+  }));
+}
+
+function normalizeJobFiles(items) {
+  const source = Array.isArray(items) ? items : [];
+  return source.map((item, index) => ({
+    id: item.id || `file-${Date.now()}-${index}`,
+    name: item.name || "Uploaded file",
+    type: item.type || "application/octet-stream",
+    size: num(item.size),
+    uploadedAt: item.uploadedAt || new Date().toISOString(),
+    description: item.description || "",
+    projectId: item.projectId || "",
+    projectName: item.projectName || "",
+    dataUrl: item.dataUrl || "",
+  }));
+}
+
+function normalizeWarranty(warranty = {}) {
+  const deficiencies = Array.isArray(warranty.deficiencies) ? warranty.deficiencies : [];
+  return {
+    complete: Boolean(warranty.complete),
+    startDate: warranty.startDate || "",
+    notes: warranty.notes || "",
+    deficiencies: deficiencies.map((item, index) => ({
+      id: item.id || `deficiency-${Date.now()}-${index}`,
+      text: item.text || "",
+      done: Boolean(item.done),
+      assignedTo: item.assignedTo || "",
+      notes: item.notes || "",
+      photo: item.photo?.dataUrl
+        ? {
+            name: item.photo.name || "Deficiency photo",
+            type: item.photo.type || "image/*",
+            size: num(item.photo.size),
+            uploadedAt: item.photo.uploadedAt || new Date().toISOString(),
+            dataUrl: item.photo.dataUrl,
+          }
+        : null,
+    })),
+  };
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("File could not be read."));
+    reader.readAsDataURL(file);
   });
 }
 
@@ -3348,7 +4883,12 @@ function currentCrmRecord() {
     schedule: state.schedule,
     selections: state.selections,
     contract: state.contract,
+    purchaseOrders: normalizePurchaseOrders(state.purchaseOrders),
+    changeOrders: normalizeChangeOrders(state.changeOrders),
+    jobFiles: normalizeJobFiles(state.jobFiles),
+    warranty: normalizeWarranty(state.crm.warranty),
     output: outputState(),
+    billingStages: createBillingStages(state.crm.billingStages),
     notes: state.crm.notes,
     tasks: normalizeTasks(state.crm.tasks),
     updatedAt: new Date().toISOString(),
@@ -3379,13 +4919,22 @@ function applyCrmRecord(record) {
   els.crmSalesperson.value = record.salesperson || "Chris Peters";
   els.crmInterestedModels.value = record.interestedModels || "";
   els.crmProjectAddress.value = record.projectAddress || "";
+  state.crm.billingStages = createBillingStages(record.billingStages);
   state.crm.notes = Array.isArray(record.notes) ? record.notes : [];
   state.crm.tasks = normalizeTasks(record.tasks?.length ? record.tasks : state.crm.tasks);
+  state.selectedProjectTask = null;
+  state.crm.warranty = normalizeWarranty(record.warranty);
   state.schedule = normalizeSchedule(record.schedule);
   state.selections = createSelectionItems(record.selections?.length ? record.selections : selectionTemplate);
+  state.purchaseOrders = normalizePurchaseOrders(record.purchaseOrders);
+  state.changeOrders = normalizeChangeOrders(record.changeOrders);
+  state.selectedPurchaseOrderId = "";
+  state.selectedChangeOrderId = "";
+  state.jobFiles = normalizeJobFiles(record.jobFiles);
   state.estimateVersions = Array.isArray(record.estimateVersions) ? record.estimateVersions : [];
   state.sentEstimateVersionId = record.sentEstimateVersionId || "";
   state.output = {
+    estimateVersionId: record.output?.estimateVersionId || record.sentEstimateVersionId || "current",
     estimateDate: record.output?.estimateDate || "",
     providedBy: record.output?.providedBy || record.salesperson || "",
     location: record.output?.location || "",
@@ -3402,6 +4951,7 @@ function applyCrmRecord(record) {
     customerName: record.contract?.customerName || record.customerName || "",
     location: record.contract?.location || record.projectAddress || "",
     depositTerms: record.contract?.depositTerms || "Deposit and payment schedule to be confirmed with Zak's Homes & Cottages prior to production start.",
+    approval: record.contract?.approval || {},
     inclusions: record.contract?.inclusions || {},
     exclusions: record.contract?.exclusions || {},
   };
@@ -3445,12 +4995,15 @@ function newCrmLead() {
   els.crmSalesperson.value = "Chris Peters";
   els.crmInterestedModels.value = "";
   els.crmProjectAddress.value = "";
+  state.crm.billingStages = createBillingStages();
   state.crm.notes = [];
   state.crm.tasks = [
     { id: `task-${Date.now()}-1`, text: "Contact customer", done: false, owner: "Sales", dueDate: "", priority: "Normal", status: "Open", notes: "" },
     { id: `task-${Date.now()}-2`, text: "Gather project details", done: false, owner: "Sales", dueDate: "", priority: "Normal", status: "Open", notes: "" },
     { id: `task-${Date.now()}-3`, text: "Create first estimate", done: false, owner: "Sales", dueDate: "", priority: "Normal", status: "Open", notes: "" },
   ];
+  state.selectedProjectTask = null;
+  state.crm.warranty = normalizeWarranty();
   state.schedule = {
     startDate: todayIso(),
     owner: "Production",
@@ -3463,9 +5016,15 @@ function newCrmLead() {
     dayPopupDate: "",
   };
   state.selections = createSelectionItems();
+  state.purchaseOrders = [];
+  state.changeOrders = [];
+  state.selectedPurchaseOrderId = "";
+  state.selectedChangeOrderId = "";
+  state.jobFiles = [];
   state.estimateVersions = [];
   state.sentEstimateVersionId = "";
   state.output = {
+    estimateVersionId: "current",
     estimateDate: todayIso(),
     providedBy: loggedInSalespersonName(),
     location: "",
@@ -3482,6 +5041,14 @@ function newCrmLead() {
     customerName: "",
     location: "",
     depositTerms: "Deposit and payment schedule to be confirmed with Zak's Homes & Cottages prior to production start.",
+    approval: {
+      status: "Pending review",
+      approvedBy: "",
+      approvedRole: "",
+      approvedAt: "",
+      note: "",
+      signature: "",
+    },
     inclusions: {},
     exclusions: {},
   };
@@ -3491,6 +5058,8 @@ function newCrmLead() {
 function renderCrm() {
   if (!els.crmBoard) return;
   state.crm.tasks = normalizeTasks(state.crm.tasks);
+  state.crm.warranty = normalizeWarranty(state.crm.warranty);
+  state.crm.billingStages = createBillingStages(state.crm.billingStages);
   state.crm.status = els.crmStatus?.value || state.crm.status;
   state.crm.owner = els.crmOwner?.value || state.crm.owner;
   state.crm.followupDate = els.crmFollowupDate?.value || state.crm.followupDate;
@@ -3502,11 +5071,21 @@ function renderCrm() {
   state.crm.projectAddress = els.crmProjectAddress?.value || "";
 
   const totals = grandTotals();
+  if (els.crmLeadTitle && document.activeElement !== els.crmLeadTitle) {
+    els.crmLeadTitle.value = els.projectName.value || "";
+  }
+  if (els.crmCustomerNameInput && document.activeElement !== els.crmCustomerNameInput) {
+    els.crmCustomerNameInput.value = els.customerName.value || "";
+  }
+  if (els.crmActiveRecordTitle) {
+    els.crmActiveRecordTitle.textContent = els.projectName.value || "Untitled lead";
+  }
   els.crmCustomerName.textContent = els.customerName.value || "New Customer";
   els.crmProjectName.textContent = els.projectName.value || "Current project";
   els.crmProjectType.textContent = els.projectType.value;
   els.crmProjectLevel.textContent = els.projectLevel.disabled ? "N/A" : els.projectLevel.value;
   els.crmEstimateTotal.textContent = money.format(totals.total);
+  renderBillingStages();
 
   els.crmRecordSelect.innerHTML = [
     `<option value="">Current unsaved lead</option>`,
@@ -3523,7 +5102,7 @@ function renderCrm() {
   const current = currentCrmRecord();
   if (!state.crm.records.some((record) => record.id === current.id)) boardRecords.unshift(current);
   boardRecords.forEach((record) => {
-    const laneName = ["New", "Contacted", "Needs Estimate", "Quote Sent", "Won"].includes(record.status)
+    const laneName = ["New", "Contacted", "Needs Estimate", "Quote Sent", "Won", "Under Construction"].includes(record.status)
       ? record.status
       : record.status === "Estimate In Progress"
         ? "Needs Estimate"
@@ -3568,6 +5147,100 @@ function renderCrm() {
         )
         .join("")
     : `<p class="empty-note">No notes yet.</p>`;
+}
+
+function renderBillingStages() {
+  if (!els.crmBillingStages) return;
+  const groups = [...new Set(state.crm.billingStages.map((stage) => stage.group))];
+  const completeCount = state.crm.billingStages.filter((stage) => stage.completed).length;
+  const amountTotal = state.crm.billingStages.reduce((sum, stage) => sum + num(stage.amount), 0);
+  const paidTotal = state.crm.billingStages
+    .filter((stage) => ["Invoiced", "Paid"].includes(stage.status))
+    .reduce((sum, stage) => sum + num(stage.amount), 0);
+  if (els.billingStageCount) els.billingStageCount.textContent = String(state.crm.billingStages.length);
+  if (els.billingStageAmountTotal) els.billingStageAmountTotal.textContent = money.format(amountTotal);
+  if (els.billingStagePaidTotal) els.billingStagePaidTotal.textContent = money.format(paidTotal);
+  els.crmBillingStageSummary.textContent = `${completeCount} of ${state.crm.billingStages.length} complete`;
+  els.crmBillingStages.innerHTML = groups
+    .map((group) => {
+      const stages = state.crm.billingStages.filter((stage) => stage.group === group);
+      return `
+        <section class="billing-stage-group">
+          <h4>${escapeAttr(group)}</h4>
+          <div class="billing-stage-list">
+            ${stages
+              .map(
+                (stage) => `
+                  <div class="billing-stage-row" data-billing-stage="${escapeAttr(stage.id)}">
+                    <label class="billing-stage-check">
+                      <input data-billing-stage-field="completed" type="checkbox" ${stage.completed ? "checked" : ""} />
+                      <span>${escapeAttr(stage.label)}</span>
+                    </label>
+                    <label>
+                      Amount
+                      <input data-billing-stage-field="amount" type="number" min="0" step="0.01" value="${escapeAttr(stage.amount)}" placeholder="0" />
+                    </label>
+                    <label>
+                      Completed
+                      <input data-billing-stage-field="completedDate" type="date" value="${escapeAttr(stage.completedDate)}" />
+                    </label>
+                    <label>
+                      Billing status
+                      <select data-billing-stage-field="status">
+                        ${billingStageStatuses
+                          .map((status) => `<option ${stage.status === status ? "selected" : ""}>${escapeAttr(status)}</option>`)
+                          .join("")}
+                      </select>
+                    </label>
+                    <label>
+                      Notes
+                      <input data-billing-stage-field="notes" value="${escapeAttr(stage.notes)}" placeholder="Invoice, draw, or payment note" />
+                    </label>
+                  </div>
+                `,
+              )
+              .join("")}
+          </div>
+        </section>
+      `;
+    })
+    .join("");
+}
+
+function handleBillingStageEdit(event) {
+  const row = event.target.closest("[data-billing-stage]");
+  const field = event.target.dataset.billingStageField;
+  if (!row || !field) return;
+  const stage = state.crm.billingStages.find((item) => item.id === row.dataset.billingStage);
+  if (!stage) return;
+  if (field === "completed") {
+    stage.completed = event.target.checked;
+    if (stage.completed && stage.status === "Not started") stage.status = "Complete";
+    if (!stage.completed) {
+      stage.status = "Not started";
+      stage.completedDate = "";
+    }
+  } else {
+    stage[field] = event.target.value;
+    if (field === "amount") stage.amount = event.target.value;
+    if (field === "status") stage.completed = event.target.value !== "Not started";
+    if (field === "completedDate" && event.target.value && stage.status === "Not started") {
+      stage.completed = true;
+      stage.status = "Complete";
+    }
+  }
+  if (field === "notes" || field === "amount") {
+    const amountTotal = state.crm.billingStages.reduce((sum, item) => sum + num(item.amount), 0);
+    const paidTotal = state.crm.billingStages
+      .filter((item) => ["Invoiced", "Paid"].includes(item.status))
+      .reduce((sum, item) => sum + num(item.amount), 0);
+    if (els.billingStageAmountTotal) els.billingStageAmountTotal.textContent = money.format(amountTotal);
+    if (els.billingStagePaidTotal) els.billingStagePaidTotal.textContent = money.format(paidTotal);
+    saveActiveCrmRecordEdits();
+    return;
+  }
+  renderBillingStages();
+  saveActiveCrmRecordEdits();
 }
 
 function updateCrmRecordStatus(recordId, status) {
@@ -3632,12 +5305,228 @@ function addCrmNote() {
   saveActiveCrmRecordEdits();
 }
 
+function warrantyProjectRows() {
+  const currentId = state.crm.activeRecordId || "current";
+  const current = {
+    id: currentId,
+    projectName: currentProjectName(),
+    customerName: els.customerName?.value || "New Customer",
+    started: state.schedule?.startDate || "",
+    warranty: normalizeWarranty(state.crm.warranty),
+    current: true,
+  };
+  const saved = state.crm.records
+    .filter((record) => record.id !== state.crm.activeRecordId)
+    .map((record) => ({
+      id: record.id,
+      projectName: record.projectName || "Untitled project",
+      customerName: record.customerName || "No customer",
+      started: record.schedule?.startDate || record.createdAt || record.updatedAt || "",
+      warranty: normalizeWarranty(record.warranty),
+      current: false,
+      record,
+    }));
+  return [current, ...saved];
+}
+
+function selectedWarrantyProjectId() {
+  const rows = warrantyProjectRows();
+  const selected = state.warranty.selectedProjectId || state.crm.activeRecordId || "current";
+  return rows.some((row) => row.id === selected) ? selected : rows[0]?.id || "current";
+}
+
+function warrantyTarget(projectId = selectedWarrantyProjectId()) {
+  if (!projectId || projectId === (state.crm.activeRecordId || "current")) {
+    state.crm.warranty = normalizeWarranty(state.crm.warranty);
+    return {
+      warranty: state.crm.warranty,
+      save() {
+        saveActiveCrmRecordEdits();
+      },
+    };
+  }
+  const record = state.crm.records.find((item) => item.id === projectId);
+  if (!record) return null;
+  record.warranty = normalizeWarranty(record.warranty);
+  return {
+    record,
+    warranty: record.warranty,
+    save() {
+      persistCrmRecords();
+    },
+  };
+}
+
+function renderWarranty() {
+  if (!els.warrantyProjectsBody) return;
+  state.warranty.selectedProjectId = selectedWarrantyProjectId();
+  const rows = warrantyProjectRows();
+  const selectedRow = rows.find((row) => row.id === state.warranty.selectedProjectId) || rows[0];
+  const openDeficiencies = rows.reduce((sum, row) => sum + row.warranty.deficiencies.filter((item) => !item.done).length, 0);
+  els.warrantyProjectCount.textContent = String(rows.length);
+  els.warrantyCompleteCount.textContent = String(rows.filter((row) => row.warranty.complete).length);
+  els.warrantyOpenDeficiencyCount.textContent = String(openDeficiencies);
+  els.warrantyProjectsBody.innerHTML = rows
+    .map(
+      (row) => `
+        <tr class="order-directory-row ${row.id === state.warranty.selectedProjectId ? "selected" : ""}" data-select-warranty-project="${escapeAttr(row.id)}">
+          <td><strong>${escapeAttr(row.projectName)}</strong></td>
+          <td>${escapeAttr(row.customerName)}</td>
+          <td>${escapeAttr(row.started ? prettyDate(row.started.slice(0, 10)) : "-")}</td>
+          <td><input data-warranty-project-field="startDate" type="date" value="${escapeAttr(row.warranty.startDate)}" /></td>
+          <td><input data-warranty-project-field="complete" type="checkbox" ${row.warranty.complete ? "checked" : ""} /></td>
+          <td><textarea data-warranty-project-field="notes" rows="2" placeholder="Warranty notes">${escapeAttr(row.warranty.notes)}</textarea></td>
+        </tr>
+      `,
+    )
+    .join("");
+  els.warrantyDeficiencyProject.innerHTML = rows
+    .map((row) => `<option value="${escapeAttr(row.id)}" ${row.id === state.warranty.selectedProjectId ? "selected" : ""}>${escapeAttr(row.projectName)} - ${escapeAttr(row.customerName)}</option>`)
+    .join("");
+  els.warrantyPrintHeader.innerHTML = selectedRow
+    ? `<strong>${escapeAttr(selectedRow.projectName)}</strong><span>${escapeAttr(selectedRow.customerName)}${selectedRow.warranty.startDate ? ` - Warranty Start ${escapeAttr(prettyDate(selectedRow.warranty.startDate))}` : ""}</span>`
+    : "";
+  renderWarrantyDeficiencies();
+}
+
+function renderWarrantyDeficiencies() {
+  const target = warrantyTarget();
+  const deficiencies = target?.warranty.deficiencies || [];
+  els.warrantyDeficienciesBody.innerHTML = deficiencies.length
+    ? deficiencies
+        .map(
+          (item) => `
+            <tr data-warranty-deficiency="${escapeAttr(item.id)}">
+              <td><input data-warranty-deficiency-field="done" type="checkbox" ${item.done ? "checked" : ""} /><span class="print-only">${item.done ? "Complete" : "Open"}</span></td>
+              <td><input data-warranty-deficiency-field="text" value="${escapeAttr(item.text)}" placeholder="Deficiency" /><span class="print-only">${escapeAttr(item.text || "-")}</span></td>
+              <td><input data-warranty-deficiency-field="assignedTo" value="${escapeAttr(item.assignedTo)}" placeholder="Assigned to" /><span class="print-only">${escapeAttr(item.assignedTo || "-")}</span></td>
+              <td>
+                ${
+                  item.photo
+                    ? `<button class="selection-photo-link" type="button" data-preview-warranty-photo="${escapeAttr(item.id)}">${escapeAttr(item.photo.name)}</button>`
+                    : `<span class="muted-cell">No picture</span>`
+                }
+                <input data-warranty-deficiency-photo="${escapeAttr(item.id)}" type="file" accept="image/*" />
+              </td>
+              <td><textarea data-warranty-deficiency-field="notes" rows="2" placeholder="Notes">${escapeAttr(item.notes)}</textarea><span class="print-only">${escapeAttr(item.notes || "-")}</span></td>
+              <td><button class="danger-button no-print" type="button" data-delete-warranty-deficiency="${escapeAttr(item.id)}">Delete</button></td>
+            </tr>
+          `,
+        )
+        .join("")
+    : `<tr><td colspan="6">No deficiencies for this project yet.</td></tr>`;
+}
+
+async function addWarrantyDeficiency() {
+  const target = warrantyTarget();
+  const text = els.warrantyDeficiencyText.value.trim();
+  if (!target || !text) return;
+  const file = els.warrantyDeficiencyPhoto.files?.[0];
+  target.warranty.deficiencies.unshift({
+    id: `deficiency-${Date.now()}`,
+    text,
+    done: false,
+    assignedTo: els.warrantyDeficiencyAssignedTo.value.trim(),
+    notes: els.warrantyDeficiencyNotes.value.trim(),
+    photo: file
+      ? {
+          name: file.name,
+          type: file.type || "image/*",
+          size: file.size,
+          uploadedAt: new Date().toISOString(),
+          dataUrl: await readFileAsDataUrl(file),
+        }
+      : null,
+  });
+  els.warrantyDeficiencyText.value = "";
+  els.warrantyDeficiencyAssignedTo.value = "";
+  els.warrantyDeficiencyNotes.value = "";
+  els.warrantyDeficiencyPhoto.value = "";
+  target.save();
+  renderWarranty();
+}
+
+function handleWarrantyProjectEdit(event) {
+  const row = event.target.closest("[data-select-warranty-project]");
+  const field = event.target.dataset.warrantyProjectField;
+  const target = warrantyTarget(row?.dataset.selectWarrantyProject);
+  if (!target || !field) return;
+  if (field === "complete") target.warranty.complete = event.target.checked;
+  else target.warranty[field] = event.target.value;
+  target.save();
+  if (field === "complete" || event.type === "change") renderWarranty();
+}
+
+function handleWarrantyDeficiencyEdit(event) {
+  const row = event.target.closest("[data-warranty-deficiency]");
+  const field = event.target.dataset.warrantyDeficiencyField;
+  const target = warrantyTarget();
+  const item = target?.warranty.deficiencies.find((entry) => entry.id === row?.dataset.warrantyDeficiency);
+  if (!item || !field) return;
+  if (field === "done") item.done = event.target.checked;
+  else item[field] = event.target.value;
+  target.save();
+  if (field === "done") renderWarranty();
+}
+
+async function handleWarrantyDeficiencyPhoto(event) {
+  const input = event.target.closest("[data-warranty-deficiency-photo]");
+  const file = input?.files?.[0];
+  if (!input || !file) return;
+  const target = warrantyTarget();
+  const item = target?.warranty.deficiencies.find((entry) => entry.id === input.dataset.warrantyDeficiencyPhoto);
+  if (!item) return;
+  item.photo = {
+    name: file.name,
+    type: file.type || "image/*",
+    size: file.size,
+    uploadedAt: new Date().toISOString(),
+    dataUrl: await readFileAsDataUrl(file),
+  };
+  input.value = "";
+  target.save();
+  renderWarranty();
+}
+
+function openWarrantyPhotoPreview(deficiencyId) {
+  const target = warrantyTarget();
+  const item = target?.warranty.deficiencies.find((entry) => entry.id === deficiencyId);
+  if (!item?.photo?.dataUrl || !els.jobFilePreviewModal || !els.jobFilePreviewBody) return;
+  state.openJobFilePreviewId = "";
+  state.openJobFilePreviewProjectId = "";
+  els.jobFilePreviewModal.hidden = false;
+  els.jobFilePreviewTitle.textContent = item.photo.name || "Deficiency photo";
+  els.jobFilePreviewDownload.href = item.photo.dataUrl;
+  els.jobFilePreviewDownload.download = item.photo.name || "deficiency-photo";
+  els.jobFilePreviewBody.classList.remove("pdf-pages");
+  els.jobFilePreviewBody.innerHTML = "";
+  const image = document.createElement("img");
+  image.src = item.photo.dataUrl;
+  image.alt = item.text || "Deficiency photo";
+  els.jobFilePreviewBody.append(image);
+}
+
+function deleteWarrantyDeficiency(deficiencyId) {
+  const target = warrantyTarget();
+  if (!target) return;
+  target.warranty.deficiencies = target.warranty.deficiencies.filter((item) => item.id !== deficiencyId);
+  target.save();
+  renderWarranty();
+}
+
+function printDeficiencyList() {
+  document.body.classList.add("warranty-printing");
+  window.print();
+  window.setTimeout(() => document.body.classList.remove("warranty-printing"), 500);
+}
+
 function taskProjectRows() {
   const currentId = state.crm.activeRecordId || "current";
   const rows = [
     {
       projectId: currentId,
       projectName: currentProjectName(),
+      customerName: els.customerName?.value || "New Customer",
       current: true,
       tasks: normalizeTasks(state.crm.tasks),
     },
@@ -3647,6 +5536,7 @@ function taskProjectRows() {
     rows.push({
       projectId: record.id,
       projectName: record.projectName || "Untitled project",
+      customerName: record.customerName || "No customer",
       current: false,
       record,
       tasks: normalizeTasks(record.tasks || []),
@@ -3657,6 +5547,7 @@ function taskProjectRows() {
       ...task,
       projectId: project.projectId,
       projectName: project.projectName,
+      customerName: project.customerName,
       current: project.current,
       record: project.record,
     })),
@@ -3691,12 +5582,12 @@ function taskBreakdownRecords(type) {
 
 function taskBreakdownTitle(type, tasks) {
   const labels = {
-    total: "Total tasks",
-    open: "Open tasks",
-    dueSoon: "Tasks due soon",
-    complete: "Complete tasks",
+    total: "Total to-dos",
+    open: "Open to-dos",
+    dueSoon: "To-dos due soon",
+    complete: "Complete to-dos",
   };
-  return `${labels[type] || "Tasks"} (${tasks.length})`;
+  return `${labels[type] || "To-Dos"} (${tasks.length})`;
 }
 
 function renderTaskBreakdown() {
@@ -3713,7 +5604,7 @@ function renderTaskBreakdown() {
   els.taskBreakdownTitle.textContent = taskBreakdownTitle(type, tasks);
   els.taskBreakdownBody.innerHTML = `
     <div class="management-breakdown-summary">
-      <div><span>Tasks</span><strong>${tasks.length}</strong></div>
+      <div><span>To-Dos</span><strong>${tasks.length}</strong></div>
       <div><span>Open / complete</span><strong>${openCount} / ${completeCount}</strong></div>
     </div>
     ${
@@ -3737,7 +5628,7 @@ function renderTaskBreakdown() {
               )
               .join("")}
           </div>`
-        : `<p class="empty-note">No tasks in this group yet.</p>`
+        : `<p class="empty-note">No to-dos in this group yet.</p>`
     }
   `;
 }
@@ -3751,11 +5642,18 @@ function renderProjectTasks() {
   if (!state.taskFilters.projectId || (state.taskFilters.projectId !== "all" && !taskProjectRows().some((task) => task.projectId === state.taskFilters.projectId))) {
     state.taskFilters.projectId = activeProjectId;
   }
+  if (
+    state.selectedProjectTask &&
+    !taskProjectRows().some((task) => task.projectId === state.selectedProjectTask.projectId && task.id === state.selectedProjectTask.taskId)
+  ) {
+    state.selectedProjectTask = null;
+  }
   const displayedTasks = filteredProjectTasks();
   const openTasks = displayedTasks.filter((task) => !task.done);
   const completeTasks = displayedTasks.filter((task) => task.done);
   const dueSoon = openTasks.filter((task) => task.dueDate && task.dueDate <= soon).length;
-  els.projectTaskProjectSelect.innerHTML = projectOptionsHtml(activeProjectId);
+  const selectedFormProjectId = state.selectedProjectTask?.projectId || activeProjectId;
+  els.projectTaskProjectSelect.innerHTML = projectOptionsHtml(selectedFormProjectId);
   els.projectTaskListProjectSelect.innerHTML = taskProjectOptionsHtml(state.taskFilters.projectId || activeProjectId);
   els.projectTaskListProjectSelect.value = state.taskFilters.projectId || activeProjectId;
   els.projectTaskOwnerFilter.value = state.taskFilters.owner || "All owners";
@@ -3768,82 +5666,104 @@ function renderProjectTasks() {
     ? displayedTasks
     .map(
       (task) => `
-        <tr data-project-task="${task.id}" data-project-task-project="${task.projectId}" class="${task.done ? "task-complete" : ""}">
-          <td><input data-project-task-field="done" type="checkbox" ${task.done ? "checked" : ""} /></td>
-          <td><span class="project-task-project-name">${escapeAttr(task.projectName)}</span></td>
-          <td><input data-project-task-field="text" value="${escapeAttr(task.text)}" /></td>
-          <td>
-            <select data-project-task-field="owner">
-              ${["Sales", "Office", "Production", "Owners", "Accounting"]
-                .map((owner) => `<option ${task.owner === owner ? "selected" : ""}>${owner}</option>`)
-                .join("")}
-            </select>
-          </td>
-          <td><input data-project-task-field="dueDate" type="date" value="${task.dueDate || ""}" /></td>
-          <td>
-            <select data-project-task-field="priority">
-              ${["Low", "Normal", "High"].map((priority) => `<option ${task.priority === priority ? "selected" : ""}>${priority}</option>`).join("")}
-            </select>
-          </td>
-          <td>
-            <select data-project-task-field="status">
-              ${["Open", "In Progress", "Waiting", "Complete"].map((status) => `<option ${task.status === status ? "selected" : ""}>${status}</option>`).join("")}
-            </select>
-          </td>
-          <td><input data-project-task-field="notes" value="${escapeAttr(task.notes)}" placeholder="Task notes" /></td>
+        <tr class="order-directory-row ${task.done ? "task-complete" : ""} ${state.selectedProjectTask?.projectId === task.projectId && state.selectedProjectTask?.taskId === task.id ? "selected" : ""}" data-select-project-task="${task.id}" data-project-task-project="${task.projectId}">
+          <td>${task.done ? "Yes" : "No"}</td>
+          <td><span class="project-task-project-name">${escapeAttr(task.projectName)} - ${escapeAttr(task.customerName || "No customer")}</span></td>
+          <td>${escapeAttr(task.text)}</td>
+          <td>${escapeAttr(task.owner || "Unassigned")}</td>
+          <td>${escapeAttr(task.dueDate || "-")}</td>
+          <td>${escapeAttr(task.priority || "Normal")}</td>
+          <td>${escapeAttr(task.status || (task.done ? "Complete" : "Open"))}</td>
+          <td>${escapeAttr(task.notes || "-")}</td>
         </tr>
       `,
     )
     .join("")
-    : `<tr><td colspan="8" class="empty-table-cell">No tasks match those filters.</td></tr>`;
+    : `<tr><td colspan="8" class="empty-table-cell">No to-dos match those filters.</td></tr>`;
+  els.addProjectTaskBtn.textContent = state.selectedProjectTask ? "Update task" : "Add task";
   renderTaskBreakdown();
+}
+
+function projectTaskTarget(projectId = els.projectTaskProjectSelect.value || state.crm.activeRecordId || "current") {
+  if (!projectId || projectId === (state.crm.activeRecordId || "current")) {
+    state.crm.tasks = normalizeTasks(state.crm.tasks);
+    return {
+      tasks: state.crm.tasks,
+      save() {
+        saveActiveCrmRecordEdits();
+      },
+    };
+  }
+  const record = state.crm.records.find((item) => item.id === projectId);
+  if (!record) return null;
+  record.tasks = normalizeTasks(record.tasks || []);
+  return {
+    record,
+    tasks: record.tasks,
+    save() {
+      persistCrmRecords();
+    },
+  };
+}
+
+function clearProjectTaskForm() {
+  state.selectedProjectTask = null;
+  els.projectTaskProjectSelect.value = state.crm.activeRecordId || "current";
+  els.projectTaskText.value = "";
+  els.projectTaskOwner.value = "Sales";
+  els.projectTaskDueDate.value = "";
+  els.projectTaskPriority.value = "Normal";
+  els.projectTaskStatus.value = "Open";
+  els.projectTaskNotes.value = "";
 }
 
 function addProjectTask() {
   const text = els.projectTaskText.value.trim();
   if (!text) return;
-  state.crm.tasks = normalizeTasks(state.crm.tasks);
-  state.crm.tasks.push({
-    id: `task-${Date.now()}`,
+  const targetProjectId = els.projectTaskProjectSelect.value || state.crm.activeRecordId || "current";
+  const target = projectTaskTarget(targetProjectId);
+  if (!target) return;
+  const values = {
     text,
-    done: false,
+    done: els.projectTaskStatus.value === "Complete",
     owner: els.projectTaskOwner.value || "Sales",
     dueDate: els.projectTaskDueDate.value || "",
     priority: els.projectTaskPriority.value || "Normal",
-    status: "Open",
+    status: els.projectTaskStatus.value || "Open",
     notes: els.projectTaskNotes.value.trim(),
-  });
-  els.projectTaskText.value = "";
-  els.projectTaskDueDate.value = "";
-  els.projectTaskPriority.value = "Normal";
-  els.projectTaskNotes.value = "";
+  };
+  const existing =
+    state.selectedProjectTask?.projectId === targetProjectId
+      ? target.tasks.find((task) => task.id === state.selectedProjectTask.taskId)
+      : null;
+  if (existing) {
+    Object.assign(existing, values);
+  } else {
+    target.tasks.push({
+      id: `task-${Date.now()}`,
+      ...values,
+    });
+  }
+  target.save();
+  clearProjectTaskForm();
   renderProjectTasks();
   renderCrm();
-  saveActiveCrmRecordEdits();
 }
 
-function handleProjectTaskEdit(event) {
-  const row = event.target.closest("[data-project-task]");
-  const field = event.target.dataset.projectTaskField;
-  const projectId = row?.dataset.projectTaskProject;
-  const record = projectId && projectId !== (state.crm.activeRecordId || "current") ? state.crm.records.find((item) => item.id === projectId) : null;
-  const sourceTasks = record ? normalizeTasks(record.tasks || []) : state.crm.tasks;
-  const task = sourceTasks.find((item) => item.id === row?.dataset.projectTask);
-  if (!task || !field) return;
-  if (field === "done") {
-    task.done = event.target.checked;
-    task.status = task.done ? "Complete" : "Open";
-  } else {
-    task[field] = event.target.value;
-    if (field === "status") task.done = event.target.value === "Complete";
-  }
-  if (record) {
-    record.tasks = sourceTasks;
-    persistCrmRecords();
-  }
+function selectProjectTask(projectId, taskId) {
+  const target = projectTaskTarget(projectId);
+  const task = target?.tasks.find((item) => item.id === taskId);
+  if (!task) return;
+  state.selectedProjectTask = { projectId, taskId };
+  els.projectTaskProjectSelect.innerHTML = projectOptionsHtml(projectId);
+  els.projectTaskProjectSelect.value = projectId;
+  els.projectTaskText.value = task.text;
+  els.projectTaskOwner.value = task.owner || "Sales";
+  els.projectTaskDueDate.value = task.dueDate || "";
+  els.projectTaskPriority.value = task.priority || "Normal";
+  els.projectTaskStatus.value = task.status || (task.done ? "Complete" : "Open");
+  els.projectTaskNotes.value = task.notes || "";
   renderProjectTasks();
-  renderCrm();
-  saveActiveCrmRecordEdits();
 }
 
 function resetPrototype() {
@@ -3902,17 +5822,26 @@ async function init() {
     "printOutputBtn",
     "outputLineEditor",
     "proposalPreview",
+    "outputEstimateVersion",
     "contractDate",
     "contractEstimateVersion",
     "contractCustomerName",
     "contractLocation",
     "contractDepositTerms",
+    "contractApprovalStatus",
+    "contractApprovalNote",
+    "approveContractBtn",
+    "revokeContractApprovalBtn",
+    "contractApprovalMessage",
     "printContractBtn",
     "contractInclusions",
     "contractExclusions",
     "contractPreview",
     "crmBoard",
     "crmRecordSelect",
+    "crmActiveRecordTitle",
+    "crmLeadTitle",
+    "crmCustomerNameInput",
     "crmStatus",
     "crmOwner",
     "crmFollowupDate",
@@ -3927,6 +5856,8 @@ async function init() {
     "crmProjectType",
     "crmProjectLevel",
     "crmEstimateTotal",
+    "crmBillingStageSummary",
+    "crmBillingStages",
     "crmTasks",
     "projectTaskTotal",
     "projectTaskOpen",
@@ -3938,6 +5869,7 @@ async function init() {
     "projectTaskOwner",
     "projectTaskDueDate",
     "projectTaskPriority",
+    "projectTaskStatus",
     "projectTaskNotes",
     "addProjectTaskBtn",
     "projectTasksBody",
@@ -3947,6 +5879,19 @@ async function init() {
     "taskBreakdownTitle",
     "taskBreakdownBody",
     "closeTaskBreakdownBtn",
+    "warrantyProjectCount",
+    "warrantyCompleteCount",
+    "warrantyOpenDeficiencyCount",
+    "warrantyProjectsBody",
+    "warrantyDeficiencyProject",
+    "warrantyDeficiencyText",
+    "warrantyDeficiencyAssignedTo",
+    "warrantyDeficiencyPhoto",
+    "warrantyDeficiencyNotes",
+    "addWarrantyDeficiencyBtn",
+    "printDeficiencyListBtn",
+    "warrantyDeficienciesBody",
+    "warrantyPrintHeader",
     "crmNoteInput",
     "crmNotes",
     "addTaskBtn",
@@ -3984,6 +5929,7 @@ async function init() {
     "scheduleEditTrade",
     "scheduleEditSubtrade",
     "scheduleEditDate",
+    "scheduleEditEndDate",
     "scheduleEditStatus",
     "scheduleEditNotes",
     "addScheduleItemBtn",
@@ -4002,6 +5948,61 @@ async function init() {
     "allowanceActualTotal",
     "allowanceVarianceTotal",
     "allowancesBody",
+    "billingStageCount",
+    "billingStageAmountTotal",
+    "billingStagePaidTotal",
+    "jobFileCount",
+    "jobPhotoCount",
+    "jobFileTotalSize",
+    "jobFileProject",
+    "jobFileProjectFilter",
+    "jobFileInput",
+    "jobFileDescription",
+    "addJobFilesBtn",
+    "jobFileUploadNote",
+    "jobFilesList",
+    "jobFilePreviewModal",
+    "jobFilePreviewTitle",
+    "jobFilePreviewDownload",
+    "jobFilePreviewBody",
+    "closeJobFilePreviewBtn",
+    "vendorCount",
+    "subtradeCount",
+    "materialVendorCount",
+    "vendorCompany",
+    "vendorType",
+    "vendorTrade",
+    "vendorContact",
+    "vendorPhone",
+    "vendorEmail",
+    "vendorStatus",
+    "vendorNotes",
+    "addVendorBtn",
+    "vendorSearch",
+    "vendorTradeFilter",
+    "vendorsBody",
+    "purchaseOrderCount",
+    "purchaseOrderOpenTotal",
+    "purchaseOrderIssuedTotal",
+    "purchaseOrderVendor",
+    "purchaseOrderTrade",
+    "purchaseOrderAmount",
+    "purchaseOrderNeededDate",
+    "purchaseOrderStatus",
+    "purchaseOrderNotes",
+    "addPurchaseOrderBtn",
+    "purchaseOrdersBody",
+    "changeOrderCount",
+    "changeOrderPendingTotal",
+    "changeOrderApprovedTotal",
+    "changeOrderTitle",
+    "changeOrderRequestedBy",
+    "changeOrderAmount",
+    "changeOrderDate",
+    "changeOrderStatus",
+    "changeOrderDescription",
+    "addChangeOrderBtn",
+    "changeOrdersBody",
     "reviewTotals",
     "reviewSections",
     "reviewWarnings",
@@ -4022,6 +6023,7 @@ async function init() {
 
   state.library = await fetch("./estimate_library_extract.json").then((response) => response.json());
   loadCrmRecords();
+  loadVendors();
   loadAuthSession();
   hydrateLines();
 
@@ -4039,6 +6041,13 @@ async function init() {
   document.querySelectorAll(".nav-button").forEach((button) => {
     button.addEventListener("click", () => setView(button.dataset.view));
   });
+  document.querySelectorAll("[data-nav-group-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const group = document.querySelector(`[data-nav-group="${button.dataset.navGroupToggle}"]`);
+      group?.classList.toggle("collapsed");
+      syncNavGroups();
+    });
+  });
   els.loginForm.addEventListener("submit", handleLogin);
   els.logoutBtn.addEventListener("click", logout);
   document.addEventListener("input", (event) => {
@@ -4050,6 +6059,18 @@ async function init() {
       handleAllowanceEdit(event);
       return;
     }
+    if (event.target.closest("[data-purchase-order]")) {
+      handlePurchaseOrderEdit(event);
+      return;
+    }
+    if (event.target.closest("[data-change-order]")) {
+      handleChangeOrderEdit(event);
+      return;
+    }
+    if (event.target.closest("[data-job-file]")) {
+      handleJobFileEdit(event);
+      return;
+    }
     if (event.target.closest("[data-calculator]")) {
       handleCalcEdit(event);
       return;
@@ -4059,7 +6080,18 @@ async function init() {
       return;
     }
     if (event.target.closest("[data-project-task]")) {
-      handleProjectTaskEdit(event);
+      return;
+    }
+    if (event.target.closest("[data-billing-stage]")) {
+      handleBillingStageEdit(event);
+      return;
+    }
+    if (event.target.closest("[data-select-warranty-project]")) {
+      handleWarrantyProjectEdit(event);
+      return;
+    }
+    if (event.target.closest("[data-warranty-deficiency]")) {
+      handleWarrantyDeficiencyEdit(event);
       return;
     }
     if (event.target.dataset.outputDescription || event.target.closest(".output-tools")) {
@@ -4085,6 +6117,7 @@ async function init() {
         els.scheduleEditTrade,
         els.scheduleEditSubtrade,
         els.scheduleEditDate,
+        els.scheduleEditEndDate,
         els.scheduleEditStatus,
         els.scheduleEditNotes,
       ].includes(event.target)
@@ -4116,6 +6149,18 @@ async function init() {
       handleAllowanceEdit(event);
       return;
     }
+    if (event.target.closest("[data-purchase-order]")) {
+      handlePurchaseOrderEdit(event);
+      return;
+    }
+    if (event.target.closest("[data-change-order]")) {
+      handleChangeOrderEdit(event);
+      return;
+    }
+    if (event.target.closest("[data-job-file]")) {
+      handleJobFileEdit(event);
+      return;
+    }
     if (event.target.closest("[data-calculator]")) {
       handleCalcEdit(event);
       return;
@@ -4125,7 +6170,22 @@ async function init() {
       return;
     }
     if (event.target.closest("[data-project-task]")) {
-      handleProjectTaskEdit(event);
+      return;
+    }
+    if (event.target.closest("[data-billing-stage]")) {
+      handleBillingStageEdit(event);
+      return;
+    }
+    if (event.target.closest("[data-select-warranty-project]")) {
+      handleWarrantyProjectEdit(event);
+      return;
+    }
+    if (event.target.closest("[data-warranty-deficiency-photo]")) {
+      handleWarrantyDeficiencyPhoto(event);
+      return;
+    }
+    if (event.target.closest("[data-warranty-deficiency]")) {
+      handleWarrantyDeficiencyEdit(event);
       return;
     }
     if (event.target.dataset.outputDescription || event.target.closest(".output-tools")) {
@@ -4151,6 +6211,7 @@ async function init() {
         els.scheduleEditTrade,
         els.scheduleEditSubtrade,
         els.scheduleEditDate,
+        els.scheduleEditEndDate,
         els.scheduleEditStatus,
         els.scheduleEditNotes,
       ].includes(event.target)
@@ -4161,6 +6222,12 @@ async function init() {
     if ([els.sectionFilter, els.projectType].includes(event.target)) render();
   });
   document.addEventListener("click", (event) => {
+    const resizeButton = event.target.closest("[data-schedule-resize]");
+    if (resizeButton) {
+      event.preventDefault();
+      pickScheduleResizeEdge(resizeButton);
+      return;
+    }
     const calcButton = event.target.closest("[data-open-calc]");
     if (calcButton) {
       state.openCalcLineId = state.openCalcLineId === calcButton.dataset.openCalc ? null : calcButton.dataset.openCalc;
@@ -4203,6 +6270,76 @@ async function init() {
       closeEstimateVersion();
       return;
     }
+    const deleteFileButton = event.target.closest("[data-delete-job-file]");
+    if (deleteFileButton) {
+      const row = deleteFileButton.closest("[data-job-file]");
+      deleteJobFile(deleteFileButton.dataset.deleteJobFile, row?.dataset.jobFileProject);
+      return;
+    }
+    const deleteVendorButton = event.target.closest("[data-delete-vendor]");
+    if (deleteVendorButton) {
+      deleteVendor(deleteVendorButton.dataset.deleteVendor);
+      return;
+    }
+    const selectVendorRow = event.target.closest("[data-select-vendor]");
+    if (selectVendorRow) {
+      selectVendor(selectVendorRow.dataset.selectVendor);
+      return;
+    }
+    const selectPurchaseOrderRow = event.target.closest("[data-select-purchase-order]");
+    if (selectPurchaseOrderRow) {
+      selectPurchaseOrder(selectPurchaseOrderRow.dataset.selectPurchaseOrder);
+      return;
+    }
+    const selectChangeOrderRow = event.target.closest("[data-select-change-order]");
+    if (selectChangeOrderRow) {
+      selectChangeOrder(selectChangeOrderRow.dataset.selectChangeOrder);
+      return;
+    }
+    const selectProjectTaskRow = event.target.closest("[data-select-project-task]");
+    if (selectProjectTaskRow) {
+      selectProjectTask(selectProjectTaskRow.dataset.projectTaskProject, selectProjectTaskRow.dataset.selectProjectTask);
+      return;
+    }
+    const selectWarrantyProjectRow = event.target.closest("[data-select-warranty-project]");
+    if (selectWarrantyProjectRow && !event.target.closest("input, textarea, select")) {
+      state.warranty.selectedProjectId = selectWarrantyProjectRow.dataset.selectWarrantyProject;
+      renderWarranty();
+      return;
+    }
+    const previewWarrantyPhotoButton = event.target.closest("[data-preview-warranty-photo]");
+    if (previewWarrantyPhotoButton) {
+      event.preventDefault();
+      openWarrantyPhotoPreview(previewWarrantyPhotoButton.dataset.previewWarrantyPhoto);
+      return;
+    }
+    const deleteWarrantyDeficiencyButton = event.target.closest("[data-delete-warranty-deficiency]");
+    if (deleteWarrantyDeficiencyButton) {
+      deleteWarrantyDeficiency(deleteWarrantyDeficiencyButton.dataset.deleteWarrantyDeficiency);
+      return;
+    }
+    const previewFileButton = event.target.closest("[data-preview-job-file]");
+    if (previewFileButton) {
+      event.preventDefault();
+      openJobFilePreview(previewFileButton.dataset.previewJobFile, previewFileButton.dataset.jobFileProject);
+      return;
+    }
+    const previewSelectionPhotoButton = event.target.closest("[data-preview-selection-photo]");
+    if (previewSelectionPhotoButton) {
+      event.preventDefault();
+      openSelectionPhotoPreview(previewSelectionPhotoButton.dataset.previewSelectionPhoto);
+      return;
+    }
+    const removeSelectionPhotoButton = event.target.closest("[data-remove-selection-photo]");
+    if (removeSelectionPhotoButton) {
+      event.preventDefault();
+      removeSelectionPhoto(removeSelectionPhotoButton.dataset.removeSelectionPhoto);
+      return;
+    }
+    if (event.target.closest("[data-close-job-file-preview]")) {
+      closeJobFilePreview();
+      return;
+    }
     const managementSummary = event.target.closest("[data-management-breakdown]");
     if (managementSummary) {
       state.managementBreakdown = { type: managementSummary.dataset.managementBreakdown };
@@ -4231,6 +6368,11 @@ async function init() {
       renderManagementBreakdown();
       return;
     }
+    if (state.schedule.moveDrag || state.schedule.resizeDrag) {
+      event.preventDefault();
+      return;
+    }
+    if (event.target.closest("[data-schedule-resize]")) return;
     const scheduleEvent = event.target.closest("[data-schedule-event]");
     if (scheduleEvent) {
       event.preventDefault();
@@ -4269,6 +6411,7 @@ async function init() {
     }
     const calendarDate = event.target.closest("[data-calendar-date]");
     if (calendarDate) {
+      if (applyPendingScheduleResize(calendarDate.dataset.calendarDate)) return;
       selectScheduleDate(calendarDate.dataset.calendarDate);
       return;
     }
@@ -4279,6 +6422,34 @@ async function init() {
       return;
     }
   });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && state.openJobFilePreviewId) closeJobFilePreview();
+  });
+  document.addEventListener("pointerdown", beginScheduleResize);
+  document.addEventListener("pointerdown", beginScheduleMove);
+  document.addEventListener("pointermove", (event) => {
+    updateScheduleResize(event);
+    updateScheduleMove(event);
+  });
+  document.addEventListener("pointerup", (event) => {
+    finishScheduleResize(event);
+    finishScheduleMove(event);
+  });
+  document.addEventListener("pointercancel", (event) => {
+    finishScheduleResize(event);
+    finishScheduleMove(event);
+  });
+  document.addEventListener("mousedown", (event) => {
+    if (!beginScheduleResize(event)) beginScheduleMove(event);
+  });
+  document.addEventListener("mousemove", (event) => {
+    updateScheduleResize(event);
+    updateScheduleMove(event);
+  });
+  document.addEventListener("mouseup", (event) => {
+    finishScheduleResize(event);
+    finishScheduleMove(event);
+  });
   document.addEventListener("dblclick", (event) => {
     if (event.target.closest("[data-schedule-event]")) return;
     const calendarDate = event.target.closest("[data-calendar-date]");
@@ -4286,9 +6457,22 @@ async function init() {
       createScheduleItemOnDate(calendarDate.dataset.calendarDate);
     }
   });
-  document.addEventListener("dragstart", handleCrmDragStart);
-  document.addEventListener("dragend", handleCrmDragEnd);
+  document.addEventListener("dragstart", (event) => {
+    if (handleScheduleDragStart(event)) return;
+    handleCrmDragStart(event);
+  });
+  document.addEventListener("dragend", (event) => {
+    event.target.closest("[data-schedule-event]")?.classList.remove("dragging");
+    handleCrmDragEnd(event);
+  });
   document.addEventListener("dragover", (event) => {
+    const calendarTarget = event.target.closest("[data-calendar-week], [data-calendar-date]");
+    if (calendarTarget && Array.from(event.dataTransfer.types).includes("application/zaks-schedule")) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      highlightCalendarDropDay(event);
+      return;
+    }
     const lane = event.target.closest("[data-crm-lane]");
     if (!lane) return;
     event.preventDefault();
@@ -4296,17 +6480,28 @@ async function init() {
     lane.classList.add("drag-over");
   });
   document.addEventListener("dragleave", (event) => {
+    const calendarWeek = event.target.closest("[data-calendar-week]");
+    if (calendarWeek && !calendarWeek.contains(event.relatedTarget)) {
+      document.querySelectorAll("[data-calendar-date]").forEach((day) => day.classList.remove("drag-over"));
+      return;
+    }
     const lane = event.target.closest("[data-crm-lane]");
     if (!lane || lane.contains(event.relatedTarget)) return;
     lane.classList.remove("drag-over");
   });
-  document.addEventListener("drop", handleCrmDrop);
+  document.addEventListener("drop", (event) => {
+    document.querySelectorAll("[data-calendar-date]").forEach((day) => day.classList.remove("drag-over"));
+    if (handleScheduleDrop(event)) return;
+    handleCrmDrop(event);
+  });
   byId("resetBtn").addEventListener("click", resetPrototype);
   els.distanceLookupBtn.addEventListener("click", lookupDistance);
   els.exportBtn.addEventListener("click", exportSummary);
   els.saveEstimateVersionBtn.addEventListener("click", saveEstimateVersion);
   els.closeEstimateVersionBtn.addEventListener("click", closeEstimateVersion);
-  els.printContractBtn.addEventListener("click", () => window.print());
+  els.printContractBtn.addEventListener("click", printApprovedContract);
+  els.approveContractBtn.addEventListener("click", approveContract);
+  els.revokeContractApprovalBtn.addEventListener("click", revokeContractApproval);
   els.closeManagementBreakdownBtn.addEventListener("click", () => {
     state.managementBreakdown = null;
     renderManagementBreakdown();
@@ -4353,9 +6548,42 @@ async function init() {
     const record = state.crm.records.find((item) => item.id === els.crmRecordSelect.value);
     if (record) applyCrmRecord(record);
   });
+  els.crmLeadTitle.addEventListener("input", () => {
+    els.projectName.value = els.crmLeadTitle.value;
+    renderCrm();
+    renderEstimateOutput();
+    renderContract();
+    saveActiveCrmRecordEdits({ refreshCrm: true });
+  });
+  els.crmCustomerNameInput.addEventListener("input", () => {
+    els.customerName.value = els.crmCustomerNameInput.value;
+    renderCrm();
+    renderEstimateOutput();
+    renderContract();
+    saveActiveCrmRecordEdits({ refreshCrm: true });
+  });
   els.addTaskBtn.addEventListener("click", addCrmTask);
   els.addProjectTaskBtn.addEventListener("click", addProjectTask);
-  els.projectTaskProjectSelect.addEventListener("change", () => switchTaskProject(els.projectTaskProjectSelect.value));
+  els.addVendorBtn.addEventListener("click", addVendor);
+  els.vendorSearch.addEventListener("input", renderVendors);
+  els.vendorTradeFilter.addEventListener("change", renderVendors);
+  els.addPurchaseOrderBtn.addEventListener("click", addPurchaseOrder);
+  els.addChangeOrderBtn.addEventListener("click", addChangeOrder);
+  els.addJobFilesBtn.addEventListener("click", addJobFiles);
+  els.addWarrantyDeficiencyBtn.addEventListener("click", addWarrantyDeficiency);
+  els.printDeficiencyListBtn.addEventListener("click", printDeficiencyList);
+  els.warrantyDeficiencyProject.addEventListener("change", () => {
+    state.warranty.selectedProjectId = els.warrantyDeficiencyProject.value;
+    renderWarranty();
+  });
+  els.jobFileProjectFilter.addEventListener("change", renderJobFiles);
+  els.closeJobFilePreviewBtn.addEventListener("click", closeJobFilePreview);
+  els.projectTaskProjectSelect.addEventListener("change", () => {
+    if (state.selectedProjectTask?.projectId !== els.projectTaskProjectSelect.value) {
+      state.selectedProjectTask = null;
+      els.addProjectTaskBtn.textContent = "Add task";
+    }
+  });
   els.projectTaskListProjectSelect.addEventListener("change", () => {
     state.taskFilters.projectId = els.projectTaskListProjectSelect.value;
     if (state.taskFilters.projectId !== "all") switchTaskProject(state.taskFilters.projectId);
