@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RTM Estimate Prototype</title>
-    <link rel="stylesheet" href="./styles.css?v=crm-six-lanes" />
+    <link rel="stylesheet" href="./styles.css?v=estimate-customer-descriptions" />
   </head>
   <body>
     <section id="loginScreen" class="login-screen">
@@ -77,110 +77,40 @@
           </div>
         </nav>
 
-        <section class="panel project-panel">
-          <h2>Project</h2>
-          <label>
-            Project name
-            <input id="projectName" value="Sample RTM Estimate" />
-          </label>
-          <label>
-            Customer
-            <input id="customerName" value="New Customer" />
-          </label>
-          <label>
-            Type
-            <select id="projectType">
-              <option>RTM</option>
-              <option>Simple Home</option>
-              <option>Site-built</option>
-            </select>
-          </label>
-          <label>
-            Project level
-            <select id="projectLevel">
-              <option>Standard</option>
-              <option>Enhanced</option>
-              <option>Executive</option>
-            </select>
-          </label>
-          <div class="field-grid">
-            <label>
-              House sq ft
-              <input id="houseSqft" type="number" value="1400" min="0" />
-            </label>
-            <label>
-              Garage sq ft
-              <input id="garageSqft" type="number" value="0" min="0" />
-            </label>
-          </div>
-          <label>
-            Distance from Zak's
-            <input id="travelDistance" type="number" value="75" min="0" />
-          </label>
-          <div class="field-grid">
-            <label>
-              Town / city
-              <input id="destinationTown" value="" placeholder="e.g. Saskatoon" />
-            </label>
-            <label>
-              Province
-              <select id="destinationProvince">
-                <option>SK</option>
-                <option>AB</option>
-                <option>MB</option>
-              </select>
-            </label>
-          </div>
-          <button id="distanceLookupBtn" class="secondary" type="button">Estimate distance</button>
-          <p id="distanceLookupNote" class="helper-note"></p>
-        </section>
-
-        <section class="panel crm-contact-panel">
-          <h2>Contact Details</h2>
-          <label>
-            Phone
-            <input id="crmPhone" placeholder="Customer phone" />
-          </label>
-          <label>
-            Email
-            <input id="crmEmail" placeholder="Customer email" />
-          </label>
-          <label>
-            Lead source
-            <select id="crmLeadSource">
-              <option>Walk-in</option>
-              <option>Website</option>
-              <option>Referral</option>
-              <option>Repeat customer</option>
-              <option>Social media</option>
-              <option>Trade show</option>
-              <option>Other</option>
-            </select>
-          </label>
-          <label>
-            Salesperson
-            <select id="crmSalesperson">
-              <option>Chris Peters</option>
-              <option>Angela Kiedrowski</option>
-              <option>Will Buhler</option>
-              <option>Kelsie Funk</option>
-              <option>Dale Deptuck</option>
-              <option>Sam Milne</option>
-              <option>Chad Zacharias</option>
-            </select>
-          </label>
-          <label>
-            Models interested in
-            <textarea id="crmInterestedModels" rows="3" placeholder="Model names, sizes, or plan notes"></textarea>
-          </label>
-          <label>
-            Project address
-            <textarea id="crmProjectAddress" rows="3" placeholder="Site or delivery address"></textarea>
-          </label>
-        </section>
       </aside>
 
       <main class="workspace">
+        <section class="panel project-panel">
+          <label>
+            Client / project
+            <select id="estimateProjectSelect"></select>
+          </label>
+        </section>
+
+        <section class="panel schedule-top-panel" hidden>
+          <h2>Schedule</h2>
+          <label>
+            Schedule start
+            <input id="scheduleStartDate" type="date" />
+          </label>
+          <label>
+            Schedule owner
+            <input id="scheduleOwner" value="Production" />
+          </label>
+          <label>
+            Calendar view
+            <select id="scheduleScope">
+              <option value="current">Current project</option>
+              <option value="all">All saved projects</option>
+            </select>
+          </label>
+          <label>
+            Trade calendar
+            <select id="scheduleTradeFilter"></select>
+          </label>
+          <button id="applyScheduleTemplateBtn" class="secondary" type="button">Apply template</button>
+        </section>
+
         <header class="topbar">
           <div>
             <p class="eyebrow">Prototype</p>
@@ -223,6 +153,58 @@
         <section id="estimateView" class="view">
           <div class="estimate-layout">
             <section class="estimate-table-wrap">
+              <section class="estimate-project-details">
+                <label>
+                  Project name
+                  <input id="projectName" value="Sample RTM Estimate" />
+                </label>
+                <label>
+                  Customer
+                  <input id="customerName" value="New Customer" />
+                </label>
+                <label>
+                  Type
+                  <select id="projectType">
+                    <option>RTM</option>
+                    <option>Simple Home</option>
+                    <option>Site-built</option>
+                  </select>
+                </label>
+                <label>
+                  Project level
+                  <select id="projectLevel">
+                    <option>Standard</option>
+                    <option>Enhanced</option>
+                    <option>Executive</option>
+                  </select>
+                </label>
+                <label>
+                  House sq ft
+                  <input id="houseSqft" type="number" value="1400" min="0" />
+                </label>
+                <label>
+                  Garage sq ft
+                  <input id="garageSqft" type="number" value="0" min="0" />
+                </label>
+                <label>
+                  Distance from Zak's
+                  <input id="travelDistance" type="number" value="75" min="0" />
+                </label>
+                <label>
+                  Town / city
+                  <input id="destinationTown" value="" placeholder="e.g. Saskatoon" />
+                </label>
+                <label>
+                  Province
+                  <select id="destinationProvince">
+                    <option>SK</option>
+                    <option>AB</option>
+                    <option>MB</option>
+                  </select>
+                </label>
+                <button id="distanceLookupBtn" class="secondary" type="button">Estimate distance</button>
+                <p id="distanceLookupNote" class="helper-note"></p>
+              </section>
               <div class="section-toolbar">
                 <label>
                   Search line items
@@ -374,12 +356,12 @@
         <section id="crmView" class="view active">
           <div class="crm-layout">
             <section class="crm-main">
-              <section class="crm-active-record-card">
-                <div>
-                  <p class="eyebrow">Currently editing</p>
-                  <h3 id="crmActiveRecordTitle">Sample RTM Estimate</h3>
+              <section class="crm-card crm-contact-card">
+                <div class="crm-card-head">
+                  <h3>Contact Details</h3>
+                  <span class="billing-stage-summary">Autosaves as you type</span>
                 </div>
-                <div class="crm-active-fields">
+                <div class="crm-contact-grid">
                   <label>
                     Lead title
                     <input id="crmLeadTitle" value="Sample RTM Estimate" />
@@ -387,6 +369,46 @@
                   <label>
                     Customer name
                     <input id="crmCustomerNameInput" value="New Customer" />
+                  </label>
+                  <label>
+                    Phone
+                    <input id="crmPhone" placeholder="Customer phone" />
+                  </label>
+                  <label>
+                    Email
+                    <input id="crmEmail" placeholder="Customer email" />
+                  </label>
+                  <label>
+                    Lead source
+                    <select id="crmLeadSource">
+                      <option>Walk-in</option>
+                      <option>Website</option>
+                      <option>Referral</option>
+                      <option>Repeat customer</option>
+                      <option>Social media</option>
+                      <option>Trade show</option>
+                      <option>Other</option>
+                    </select>
+                  </label>
+                  <label>
+                    Salesperson
+                    <select id="crmSalesperson">
+                      <option>Chris Peters</option>
+                      <option>Angela Kiedrowski</option>
+                      <option>Will Buhler</option>
+                      <option>Kelsie Funk</option>
+                      <option>Dale Deptuck</option>
+                      <option>Sam Milne</option>
+                      <option>Chad Zacharias</option>
+                    </select>
+                  </label>
+                  <label>
+                    Models interested in
+                    <textarea id="crmInterestedModels" rows="3" placeholder="Model names, sizes, or plan notes"></textarea>
+                  </label>
+                  <label>
+                    Project address
+                    <textarea id="crmProjectAddress" rows="3" placeholder="Site or delivery address"></textarea>
                   </label>
                 </div>
               </section>
@@ -482,28 +504,6 @@
         <section id="scheduleView" class="view">
           <div class="schedule-layout">
             <section class="schedule-panel">
-              <div class="schedule-toolbar">
-                <label>
-                  Schedule start
-                  <input id="scheduleStartDate" type="date" />
-                </label>
-                <label>
-                  Schedule owner
-                  <input id="scheduleOwner" value="Production" />
-                </label>
-                <label>
-                  Calendar view
-                  <select id="scheduleScope">
-                    <option value="current">Current project</option>
-                    <option value="all">All saved projects</option>
-                  </select>
-                </label>
-                <label>
-                  Trade calendar
-                  <select id="scheduleTradeFilter"></select>
-                </label>
-                <button id="applyScheduleTemplateBtn" class="secondary" type="button">Apply template</button>
-              </div>
               <section class="schedule-calendar-card">
                 <div class="calendar-head">
                   <button id="schedulePrevMonthBtn" class="secondary icon-button" type="button" title="Previous month">‹</button>
@@ -822,12 +822,6 @@
             <button id="addJobFilesBtn" type="button">Add files</button>
             <p id="jobFileUploadNote" class="helper-note"></p>
           </section>
-          <div class="job-file-toolbar">
-            <label>
-              Show files for
-              <select id="jobFileProjectFilter"></select>
-            </label>
-          </div>
           <div id="jobFilesList" class="job-files-list"></div>
         </section>
 
@@ -1189,6 +1183,6 @@
       </div>
     </section>
 
-    <script src="./app.js?v=crm-six-lanes"></script>
+    <script src="./app.js?v=estimate-customer-descriptions"></script>
   </body>
 </html>

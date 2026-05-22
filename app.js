@@ -849,28 +849,96 @@ function sectionMargin(sectionName) {
   return projectInputs().targetMargin;
 }
 
-function hydrateLines() {
+function createEstimateLines({ blank = false } = {}) {
   const inputs = projectInputs();
-  state.lines = state.library.line_items.map((item, index) => ({
+  return state.library.line_items.map((item, index) => ({
     id: `${item.section_sort}-${item.source_row}-${index}`,
     section: item.section,
     sourceRow: item.source_row,
     code: item.cost_code || "",
     category: defaultLineType(item),
     description: cleanDefaultDescription(item.description || ""),
+    customerDescription: "",
     note: item.pricing_note || "",
-    quantity: resolveDefaultQuantity(item.default_quantity, inputs),
+    quantity: blank ? "" : resolveDefaultQuantity(item.default_quantity, inputs),
     quantitySource: quantitySource(item.default_quantity),
-    quantityManual: false,
+    quantityManual: blank,
     unit: item.unit || "Package",
-    unitCost: typeof item.default_unit_cost === "number" ? item.default_unit_cost : 0,
-    margin: sectionMargin(item.section),
+    unitCost: blank ? "" : typeof item.default_unit_cost === "number" ? item.default_unit_cost : 0,
+    margin: blank ? "" : sectionMargin(item.section),
     pst: item.tax_pst_default !== false,
     gst: item.tax_gst_default !== false,
     visible: item.customer_visible_default !== false,
   }));
+}
+
+function hydrateLines() {
+  state.lines = createEstimateLines();
+  state.calcValues = {};
+  state.allowanceValues = {};
+  state.openCalcLineId = null;
   moveContingencyUnderPmFees();
   state.library.sections.forEach((section) => state.expanded.add(section.section_name));
+}
+
+function hydrateBlankEstimate() {
+  state.lines = createEstimateLines({ blank: true });
+  state.calcValues = {};
+  state.allowanceValues = {};
+  state.openCalcLineId = null;
+  moveContingencyUnderPmFees();
+  state.library.sections.forEach((section) => state.expanded.add(section.section_name));
+}
+
+function serializeEstimateState() {
+  return {
+    lines: state.lines.map((line) => ({
+      id: line.id,
+      category: line.category,
+      description: line.description,
+      customerDescription: line.customerDescription || "",
+      quantity: line.quantity === "" ? "" : num(line.quantity),
+      quantitySource: line.quantitySource || "",
+      quantityManual: Boolean(line.quantityManual),
+      unit: line.unit,
+      unitCost: line.unitCost === "" ? "" : num(line.unitCost),
+      margin: line.margin === "" ? "" : num(line.margin),
+      pst: Boolean(line.pst),
+      gst: Boolean(line.gst),
+      visible: Boolean(line.visible),
+    })),
+    calcValues: state.calcValues || {},
+    allowanceValues: state.allowanceValues || {},
+  };
+}
+
+function restoreEstimateState(estimate) {
+  hydrateBlankEstimate();
+  const savedLines = Array.isArray(estimate?.lines) ? estimate.lines : [];
+  if (!savedLines.length) return;
+  const savedById = new Map(savedLines.map((line) => [line.id, line]));
+  state.lines = state.lines.map((line) => {
+    const saved = savedById.get(line.id);
+    if (!saved) return line;
+    return {
+      ...line,
+      category: saved.category || line.category,
+      description: saved.description || line.description,
+      customerDescription: saved.customerDescription || "",
+      quantity: saved.quantity === "" ? "" : num(saved.quantity),
+      quantitySource: saved.quantitySource ?? line.quantitySource,
+      quantityManual: saved.quantityManual !== undefined ? Boolean(saved.quantityManual) : true,
+      unit: saved.unit || line.unit,
+      unitCost: saved.unitCost === "" ? "" : num(saved.unitCost),
+      margin: saved.margin === "" ? "" : num(saved.margin),
+      pst: saved.pst !== undefined ? Boolean(saved.pst) : line.pst,
+      gst: saved.gst !== undefined ? Boolean(saved.gst) : line.gst,
+      visible: saved.visible !== undefined ? Boolean(saved.visible) : line.visible,
+    };
+  });
+  state.calcValues = estimate?.calcValues && typeof estimate.calcValues === "object" ? estimate.calcValues : {};
+  state.allowanceValues = estimate?.allowanceValues && typeof estimate.allowanceValues === "object" ? estimate.allowanceValues : {};
+  moveContingencyUnderPmFees();
 }
 
 function cleanDefaultDescription(description) {
@@ -968,6 +1036,7 @@ function estimateSnapshot() {
         code: line.code,
         category: line.category,
         description: line.description,
+        customerDescription: line.customerDescription || "",
         quantity: num(line.quantity),
         unit: line.unit,
         unitCost: num(line.unitCost),
@@ -981,7 +1050,7 @@ function estimateSnapshot() {
   return {
     totals,
     lines,
-    fingerprint: JSON.stringify(lines.map((line) => [line.id, line.description, line.quantity, line.unit, line.unitCost, line.margin, line.pst, line.gst])),
+    fingerprint: JSON.stringify(lines.map((line) => [line.id, line.description, line.customerDescription, line.quantity, line.unit, line.unitCost, line.margin, line.pst, line.gst])),
   };
 }
 
@@ -989,11 +1058,13 @@ function syncProjectQuantities() {
   const inputs = projectInputs();
   state.lines.forEach((line) => {
     if (line.description.toLowerCase() === "project service work") {
+      if (line.quantityManual && !num(line.quantity) && !num(line.unitCost)) return;
       line.quantity = projectServiceHours();
       line.quantityManual = false;
       return;
     }
     if (calculatorType(line) === "projectPercent") {
+      if (line.quantityManual && !num(line.quantity) && !num(line.unitCost)) return;
       const values = getCalcValues(line);
       values.percent = projectCostPercent();
       values.base = "construction";
@@ -1052,7 +1123,7 @@ function filteredSections() {
     return state.lines.some(
       (line) =>
         line.section === section.section_name &&
-        [line.description, line.code, line.category, line.unit]
+        [line.description, line.customerDescription, line.code, line.category, line.unit]
           .join(" ")
           .toLowerCase()
           .includes(search),
@@ -1119,6 +1190,7 @@ function renderLineTable(sectionName) {
                 </td>
                 <td class="desc">
                   <input data-field="description" value="${escapeAttr(line.description)}" />
+                  <textarea class="line-customer-description" data-field="customerDescription" rows="2" placeholder="Proposal / contract description">${escapeAttr(line.customerDescription || "")}</textarea>
                   <div class="line-tools">
                     ${line.note ? `<span class="note">${line.note}</span>` : "<span></span>"}
                     ${
@@ -1925,7 +1997,7 @@ function renderEstimateVersionDocument() {
                   .map(
                     (line) => `
                       <tr>
-                        <td>${escapeAttr(line.description)}</td>
+                        <td>${escapeAttr(line.customerDescription || line.description)}</td>
                         <td>${formatQuantity(line.quantity)}</td>
                         <td>${escapeAttr(line.unit || "")}</td>
                         <td>${money.format(line.total)}</td>
@@ -2006,6 +2078,7 @@ function lineOutputText(line) {
   if (!state.output.descriptions) state.output.descriptions = {};
   if (!state.output.descriptionsManual) state.output.descriptionsManual = {};
   if (state.output.descriptionsManual[line.id]) return state.output.descriptions[line.id] || "";
+  if (String(line.customerDescription || "").trim()) return String(line.customerDescription).trim();
   const qty = num(line.quantity);
   const unit = String(line.unit || "").trim();
   const prefix = qty > 0 && !["package", "allowance", ""].includes(unit.toLowerCase()) ? `${formatQuantity(qty)} ${unit} - ` : "";
@@ -2473,7 +2546,7 @@ function renderAllowances() {
       return `
         <tr data-allowance="${line.id}">
           <td>${line.section}</td>
-          <td>${escapeAttr(line.description)}</td>
+          <td>${escapeAttr(lineOutputText(line))}</td>
           <td class="money">${money.format(allowance)}</td>
           <td><input data-allowance-field="actual" type="number" value="${record.actual}" placeholder="0" step="0.01" /></td>
           <td class="money ${variance > 0 ? "over" : variance < 0 ? "under" : ""}">${money.format(variance)}</td>
@@ -2873,8 +2946,38 @@ function projectOptionsHtml(selectedId = state.crm.activeRecordId || "current") 
     .join("");
 }
 
+function estimateProjectOptionsHtml(selectedId = state.crm.activeRecordId || "current") {
+  const currentId = state.crm.activeRecordId || "current";
+  const currentLabel = `${els.customerName?.value || "New Customer"} - ${els.projectName?.value || "Current project"}`;
+  const options = [{ id: currentId, label: currentLabel }];
+  state.crm.records.forEach((record) => {
+    if (record.id === currentId) return;
+    options.push({
+      id: record.id,
+      label: `${record.customerName || "No customer"} - ${record.projectName || "Untitled project"}`,
+    });
+  });
+  return options
+    .map((option) => `<option value="${escapeAttr(option.id)}" ${option.id === selectedId ? "selected" : ""}>${escapeAttr(option.label)}</option>`)
+    .join("");
+}
+
+function renderEstimateProjectPicker() {
+  if (!els.estimateProjectSelect) return;
+  els.estimateProjectSelect.innerHTML = estimateProjectOptionsHtml();
+  els.estimateProjectSelect.value = state.crm.activeRecordId || "current";
+}
+
 function taskProjectOptionsHtml(selectedId = state.taskFilters.projectId || state.crm.activeRecordId || "current") {
   return [`<option value="all" ${selectedId === "all" ? "selected" : ""}>All projects</option>`, projectOptionsHtml(selectedId)].join("");
+}
+
+function switchEstimateProject(projectId) {
+  if (!projectId || projectId === (state.crm.activeRecordId || "current")) return;
+  saveActiveCrmRecordEdits();
+  const record = state.crm.records.find((item) => item.id === projectId);
+  if (!record) return;
+  applyCrmRecord(record);
 }
 
 function switchTaskProject(projectId) {
@@ -3252,11 +3355,11 @@ function calendarEventHtml(item, segment = {}) {
   const pendingClass = pending?.itemId === item.id && pending?.projectId === item.projectId ? `resizing-${pending.edge}` : "";
   const gridStyle =
     segment.startColumn && segment.endColumn ? `grid-column: ${segment.startColumn} / ${segment.endColumn}; --bar-row: ${segment.row || 1};` : "";
+  const label = `${item.projectName || "Project"}${item.name ? ` - ${item.name}` : ""}`;
   return `
-    <strong class="calendar-event ${segment.startColumn ? "calendar-bar" : ""} ${isRange ? "range-event" : ""} ${pendingClass} ${item.id === state.schedule.selectedItemId && item.isCurrentProject ? "active" : ""} ${item.isCurrentProject ? "" : "other-project"}" style="--event-color: ${projectColor(item.projectId)}; ${gridStyle}" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}">
+    <strong class="calendar-event ${segment.startColumn ? "calendar-bar" : ""} ${isRange ? "range-event" : ""} ${pendingClass} ${item.id === state.schedule.selectedItemId && item.isCurrentProject ? "active" : ""} ${item.isCurrentProject ? "" : "other-project"}" style="--event-color: ${projectColor(item.projectId)}; ${gridStyle}" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}" title="${escapeAttr(label)}">
       <button class="event-resize-handle event-resize-start" type="button" data-schedule-resize="start" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}" title="Drag or click, then choose a date"></button>
-      <span>${escapeAttr(item.name)}</span>
-      <small>${escapeAttr(state.schedule.scope === "all" ? `${item.projectName} - ${item.status}` : item.status)}</small>
+      <span>${escapeAttr(label)}</span>
       <button class="event-resize-handle event-resize-end" type="button" data-schedule-resize="end" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}" title="Drag or click, then choose a date"></button>
     </strong>
   `;
@@ -3823,6 +3926,7 @@ function renderManagement() {
 function render() {
   syncProjectLevelAvailability();
   syncProjectQuantities();
+  renderEstimateProjectPicker();
   renderSections();
   renderAllowances();
   renderReview();
@@ -3846,10 +3950,14 @@ function setView(view) {
   if (!hasPermission(view)) view = firstAllowedView();
   state.view = view;
   renderAuth();
-  byId("app").classList.toggle("project-panel-hidden", !["estimate", "output", "contract", "review"].includes(view));
-  byId("app").classList.toggle("crm-contact-visible", view === "crm");
-  document.querySelector(".project-panel")?.toggleAttribute("hidden", !["estimate", "output", "contract", "review"].includes(view));
-  document.querySelector(".crm-contact-panel")?.toggleAttribute("hidden", view !== "crm");
+  const fullProjectPanelViews = ["estimate", "output", "contract", "review"];
+  const compactProjectPanelViews = ["selections", "jobFiles", "billingStages", "purchaseOrders", "changeOrders", "allowances"];
+  const projectPanelVisible = [...fullProjectPanelViews, ...compactProjectPanelViews].includes(view);
+  byId("app").classList.toggle("project-panel-hidden", !projectPanelVisible);
+  const projectPanel = document.querySelector(".project-panel");
+  projectPanel?.toggleAttribute("hidden", !projectPanelVisible);
+  projectPanel?.classList.toggle("project-panel-compact", compactProjectPanelViews.includes(view));
+  document.querySelector(".schedule-top-panel")?.toggleAttribute("hidden", view !== "schedule");
   document.querySelectorAll(".nav-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
   });
@@ -3888,7 +3996,7 @@ function handleLineEdit(event) {
   if (event.target.type === "checkbox") {
     line[field] = event.target.checked;
   } else if (["quantity", "unitCost", "margin"].includes(field)) {
-    line[field] = num(event.target.value);
+    line[field] = event.target.value === "" ? "" : num(event.target.value);
     if (field === "quantity") line.quantityManual = true;
   } else {
     line[field] = event.target.value;
@@ -3896,11 +4004,13 @@ function handleLineEdit(event) {
   if (field === "quantity" && isPineCeilingSource(line)) {
     syncLinkedPineCeilingQuantities();
     render();
+    saveActiveCrmRecordEdits();
     return;
   }
   updateTotals();
   renderReview();
   renderEstimateOutput();
+  saveActiveCrmRecordEdits();
   const totals = lineTotals(line);
   const moneyCells = row.querySelectorAll(".money");
   moneyCells[0].textContent = money.format(totals.retail);
@@ -3917,6 +4027,7 @@ function handleCalcEdit(event) {
   if (event.target.dataset.calcIndex !== undefined) {
     values.quantities[num(event.target.dataset.calcIndex)] = num(event.target.value);
     render();
+    saveActiveCrmRecordEdits();
     return true;
   }
   if (event.target.dataset.flooringIndex !== undefined) {
@@ -3925,6 +4036,7 @@ function handleCalcEdit(event) {
     row[field] = field === "name" ? event.target.value : num(event.target.value);
     values.flooringManual = true;
     render();
+    saveActiveCrmRecordEdits();
     return true;
   }
   if (event.target.dataset.calcField) {
@@ -3959,6 +4071,7 @@ function handleCalcEdit(event) {
     }
     if (["trips", "kms", "rate"].includes(event.target.dataset.calcField)) values.deliveryManual = true;
     render();
+    saveActiveCrmRecordEdits();
     return true;
   }
   return true;
@@ -3976,6 +4089,7 @@ function handleAllowanceEdit(event) {
   } else if (event.type === "change") {
     renderAllowances();
   }
+  saveActiveCrmRecordEdits();
   return true;
 }
 
@@ -4310,9 +4424,9 @@ function renderJobFiles() {
   state.jobFiles = normalizeJobFiles(state.jobFiles);
   renderJobFileProjectControls();
   const records = jobFileProjectRecords();
-  const selectedProjectId = els.jobFileProjectFilter?.value || currentJobFileProjectId();
+  const selectedProjectId = currentJobFileProjectId();
   const visibleFiles = records
-    .filter((record) => selectedProjectId === "all" || record.id === selectedProjectId)
+    .filter((record) => record.id === selectedProjectId)
     .flatMap((record) =>
       normalizeJobFiles(record.jobFiles).map((file) => ({
         ...file,
@@ -4413,11 +4527,6 @@ function renderJobFileProjectControls() {
   if (els.jobFileProject) {
     const selected = jobFileProjectRecords().some((record) => record.id === els.jobFileProject.value) ? els.jobFileProject.value : currentId;
     els.jobFileProject.innerHTML = jobFileProjectOptionsHtml(selected, false);
-  }
-  if (els.jobFileProjectFilter) {
-    const selected = els.jobFileProjectFilter.value || currentId;
-    const valid = selected === "all" || jobFileProjectRecords().some((record) => record.id === selected);
-    els.jobFileProjectFilter.innerHTML = jobFileProjectOptionsHtml(valid ? selected : currentId, true);
   }
 }
 
@@ -4652,6 +4761,7 @@ function handleRatePick(event) {
   if (!line || select.value === "") return true;
   line.unitCost = num(select.value);
   render();
+  saveActiveCrmRecordEdits();
   return true;
 }
 
@@ -4877,6 +4987,7 @@ function currentCrmRecord() {
     salesperson: els.crmSalesperson.value,
     interestedModels: els.crmInterestedModels.value.trim(),
     projectAddress: els.crmProjectAddress.value,
+    estimate: serializeEstimateState(),
     estimateTotal: totals.total,
     estimateVersions: state.estimateVersions || [],
     sentEstimateVersionId: state.sentEstimateVersionId || "",
@@ -4933,6 +5044,7 @@ function applyCrmRecord(record) {
   state.jobFiles = normalizeJobFiles(record.jobFiles);
   state.estimateVersions = Array.isArray(record.estimateVersions) ? record.estimateVersions : [];
   state.sentEstimateVersionId = record.sentEstimateVersionId || "";
+  restoreEstimateState(record.estimate || { lines: record.estimateLines, calcValues: record.calcValues, allowanceValues: record.allowanceValues });
   state.output = {
     estimateVersionId: record.output?.estimateVersionId || record.sentEstimateVersionId || "current",
     estimateDate: record.output?.estimateDate || "",
@@ -5023,6 +5135,7 @@ function newCrmLead() {
   state.jobFiles = [];
   state.estimateVersions = [];
   state.sentEstimateVersionId = "";
+  hydrateBlankEstimate();
   state.output = {
     estimateVersionId: "current",
     estimateDate: todayIso(),
@@ -5767,7 +5880,7 @@ function selectProjectTask(projectId, taskId) {
 }
 
 function resetPrototype() {
-  hydrateLines();
+  hydrateBlankEstimate();
   render();
 }
 
@@ -5781,6 +5894,7 @@ async function init() {
     "activeUserName",
     "activeUserRole",
     "logoutBtn",
+    "estimateProjectSelect",
     "projectName",
     "customerName",
     "projectType",
@@ -5955,7 +6069,6 @@ async function init() {
     "jobPhotoCount",
     "jobFileTotalSize",
     "jobFileProject",
-    "jobFileProjectFilter",
     "jobFileInput",
     "jobFileDescription",
     "addJobFilesBtn",
@@ -6025,7 +6138,7 @@ async function init() {
   loadCrmRecords();
   loadVendors();
   loadAuthSession();
-  hydrateLines();
+  hydrateBlankEstimate();
 
   for (const section of state.library.sections) {
     const option = document.createElement("option");
@@ -6134,6 +6247,7 @@ async function init() {
         line.margin = num(els.targetMargin.value, 18);
       });
       render();
+      saveActiveCrmRecordEdits();
       return;
     }
     if ([els.houseSqft, els.garageSqft, els.travelDistance, els.pstRate, els.gstRate, els.searchInput, els.sectionFilter].includes(event.target)) {
@@ -6548,6 +6662,9 @@ async function init() {
     const record = state.crm.records.find((item) => item.id === els.crmRecordSelect.value);
     if (record) applyCrmRecord(record);
   });
+  els.estimateProjectSelect.addEventListener("change", () => {
+    switchEstimateProject(els.estimateProjectSelect.value);
+  });
   els.crmLeadTitle.addEventListener("input", () => {
     els.projectName.value = els.crmLeadTitle.value;
     renderCrm();
@@ -6576,7 +6693,6 @@ async function init() {
     state.warranty.selectedProjectId = els.warrantyDeficiencyProject.value;
     renderWarranty();
   });
-  els.jobFileProjectFilter.addEventListener("change", renderJobFiles);
   els.closeJobFilePreviewBtn.addEventListener("click", closeJobFilePreview);
   els.projectTaskProjectSelect.addEventListener("change", () => {
     if (state.selectedProjectTask?.projectId !== els.projectTaskProjectSelect.value) {
@@ -6628,10 +6744,12 @@ async function init() {
     renderProjectTasks();
     saveActiveCrmRecordEdits();
   });
-  ["projectName", "customerName", "projectType", "projectLevel", "houseSqft", "destinationTown", "destinationProvince"].forEach((id) =>
+  ["projectName", "customerName", "projectType", "projectLevel", "houseSqft", "garageSqft", "travelDistance", "destinationTown", "destinationProvince"].forEach((id) =>
     ["input", "change"].forEach((eventName) =>
       byId(id).addEventListener(eventName, () => {
         render();
+        renderEstimateOutput();
+        renderContract();
         saveActiveCrmRecordEdits();
       }),
     ),

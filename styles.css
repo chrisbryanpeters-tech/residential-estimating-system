@@ -84,16 +84,12 @@ label {
 
 #app {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 250px minmax(0, 1fr);
   min-height: 100vh;
 }
 
 #app.project-panel-hidden {
   grid-template-columns: 250px minmax(0, 1fr);
-}
-
-#app.crm-contact-visible {
-  grid-template-columns: 300px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -283,13 +279,84 @@ label {
   gap: 12px;
 }
 
-.crm-contact-panel {
-  display: grid;
-  gap: 12px;
+.workspace > .project-panel,
+.workspace > .schedule-top-panel {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.workspace > .project-panel {
+  grid-template-columns: minmax(320px, 1fr);
+  align-items: end;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 14px 22px;
+}
+
+.workspace > .project-panel h2 {
+  align-self: center;
+  margin: 0;
+}
+
+.workspace > .project-panel .field-grid {
+  align-items: end;
+}
+
+.workspace > .project-panel .helper-note {
+  grid-column: 1 / -1;
+  margin: -2px 0 0;
+}
+
+.workspace > .project-panel.project-panel-compact {
+  grid-template-columns: minmax(320px, 1fr);
+}
+
+.workspace > .project-panel.project-panel-compact > :nth-child(n + 2) {
+  display: none;
+}
+
+.workspace > .schedule-top-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 8px 14px;
+}
+
+.workspace > .schedule-top-panel h2 {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 14px;
+}
+
+.workspace > .schedule-top-panel label {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.workspace > .schedule-top-panel input,
+.workspace > .schedule-top-panel select {
+  min-height: 30px;
+  padding: 5px 8px;
+}
+
+.workspace > .schedule-top-panel button {
+  min-height: 30px;
+  padding: 5px 10px;
+  white-space: nowrap;
 }
 
 .project-panel[hidden],
-.crm-contact-panel[hidden] {
+.schedule-top-panel[hidden] {
   display: none;
 }
 
@@ -343,6 +410,24 @@ label {
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 18px;
   align-items: start;
+}
+
+.estimate-project-details {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 1fr) minmax(130px, 0.8fr) minmax(140px, 0.8fr) minmax(120px, 0.7fr) minmax(120px, 0.7fr) minmax(150px, 0.8fr);
+  gap: 10px;
+  align-items: end;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+}
+
+.estimate-project-details .helper-note {
+  grid-column: 1 / -1;
+  margin: -2px 0 0;
 }
 
 .section-toolbar {
@@ -1005,7 +1090,7 @@ label {
 
 .line-table th:nth-child(3),
 .line-table td:nth-child(3) {
-  width: 205px;
+  width: 260px;
 }
 
 .line-table th:nth-child(4),
@@ -1054,10 +1139,18 @@ label {
 }
 
 .line-table input,
-.line-table select {
+.line-table select,
+.line-table textarea {
   min-height: 30px;
   padding: 4px 5px;
   font-size: 12px;
+}
+
+.line-customer-description {
+  width: 100%;
+  margin-top: 5px;
+  resize: vertical;
+  line-height: 1.25;
 }
 
 .line-table input[type="checkbox"] {
@@ -1543,46 +1636,6 @@ label {
   min-width: 0;
 }
 
-.crm-active-record-card {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(420px, 1.6fr);
-  gap: 14px;
-  align-items: end;
-  background: #111111;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
-  padding: 14px;
-  color: white;
-  box-shadow: var(--shadow);
-}
-
-.crm-active-record-card .eyebrow {
-  color: #d3d7da;
-  margin-bottom: 4px;
-}
-
-.crm-active-record-card h3 {
-  margin: 0;
-  font-size: 20px;
-  line-height: 1.2;
-}
-
-.crm-active-fields {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
-}
-
-.crm-active-fields label {
-  color: #eef1f3;
-}
-
-.crm-active-fields input {
-  border-color: #45494d;
-  background: white;
-  color: var(--ink);
-}
-
 .crm-toolbar {
   display: grid;
   grid-template-columns: repeat(4, minmax(150px, 1fr));
@@ -1625,6 +1678,20 @@ label {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+}
+
+.crm-contact-card {
+  box-shadow: none;
+}
+
+.crm-contact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.crm-contact-grid label:nth-last-child(-n + 2) {
+  grid-column: span 2;
 }
 
 .lead-card {
@@ -2302,7 +2369,6 @@ textarea {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 1px;
   align-items: center;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--event-color, var(--accent)) 35%, white);
@@ -2313,7 +2379,8 @@ textarea {
   cursor: pointer;
   font-size: 12px;
   line-height: 1.25;
-  padding: 4px 24px;
+  min-height: 28px;
+  padding: 4px 18px;
   text-overflow: ellipsis;
 }
 
@@ -2342,7 +2409,7 @@ textarea {
   top: 3px;
   bottom: 3px;
   display: block;
-  width: 14px;
+  width: 8px;
   min-height: 22px;
   padding: 0;
   border: 0;
@@ -2354,11 +2421,11 @@ textarea {
 }
 
 .event-resize-start {
-  left: 4px;
+  left: 5px;
 }
 
 .event-resize-end {
-  right: 4px;
+  right: 5px;
 }
 
 .event-resize-handle:hover {
@@ -2391,6 +2458,7 @@ body.schedule-resizing .event-resize-handle {
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .calendar-event small {
@@ -3031,13 +3099,15 @@ body.schedule-resizing .event-resize-handle {
   }
 
   .estimate-layout,
+  .estimate-project-details,
   .output-layout,
   .contract-layout,
   .review-grid,
+  .workspace > .project-panel,
+  .workspace > .schedule-top-panel,
   .crm-layout,
   .crm-toolbar,
-  .crm-active-record-card,
-  .crm-active-fields,
+  .crm-contact-grid,
   .schedule-layout,
   .project-task-layout,
   .schedule-toolbar,
@@ -3059,6 +3129,10 @@ body.schedule-resizing .event-resize-handle {
 
   .crm-details-wide {
     grid-template-columns: 1fr;
+  }
+
+  .crm-contact-grid label:nth-last-child(-n + 2) {
+    grid-column: auto;
   }
 
   .customer-snapshot-card,
@@ -3091,6 +3165,28 @@ body.schedule-resizing .event-resize-handle {
 
   .estimate-layout {
     grid-template-columns: 1fr;
+  }
+
+  .workspace > .project-panel {
+    grid-template-columns: minmax(220px, 1fr);
+  }
+
+  .workspace > .project-panel h2,
+  .workspace > .project-panel .helper-note,
+  .workspace > .schedule-top-panel h2 {
+    grid-column: 1 / -1;
+  }
+
+  .workspace > .project-panel.project-panel-compact {
+    grid-template-columns: repeat(4, minmax(150px, 1fr));
+  }
+
+  .workspace > .schedule-top-panel {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+
+  .estimate-project-details {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
   }
 
   .totals-panel {
@@ -3137,7 +3233,9 @@ body.schedule-resizing .event-resize-handle {
 
 @media (max-width: 760px) {
   .section-toolbar,
-  .section-head {
+  .section-head,
+  .estimate-project-details,
+  .workspace > .schedule-top-panel {
     grid-template-columns: 1fr;
   }
 
