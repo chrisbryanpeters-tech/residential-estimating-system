@@ -1050,6 +1050,11 @@ label {
   min-width: 980px;
 }
 
+.warranty-project-wrap {
+  max-height: 360px;
+  overflow: auto;
+}
+
 .warranty-deficiency-table {
   min-width: 1050px;
 }
