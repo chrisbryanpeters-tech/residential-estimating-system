@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RTM Estimate Prototype</title>
-    <link rel="stylesheet" href="./styles.css?v=sticky-left-navigation" />
+    <link rel="stylesheet" href="./styles.css?v=schedule-project-select" />
   </head>
   <body>
     <section id="loginScreen" class="login-screen">
@@ -46,9 +46,8 @@
         <nav class="nav" aria-label="Main views">
           <button class="nav-button" data-view="tasks">To-Dos</button>
           <button class="nav-button active" data-view="crm">CRM</button>
-          <button class="nav-button" data-view="management" data-permission="management">Management</button>
-          <div class="nav-group" data-nav-group="sales">
-            <button class="nav-group-toggle" type="button" data-nav-group-toggle="sales" aria-expanded="true">Sales</button>
+          <div class="nav-group collapsed" data-nav-group="sales">
+            <button class="nav-group-toggle" type="button" data-nav-group-toggle="sales" aria-expanded="false">Sales</button>
             <div class="nav-subnav">
               <button class="nav-button" data-view="estimate">Estimate</button>
               <button class="nav-button" data-view="output">Proposal</button>
@@ -56,8 +55,8 @@
               <button class="nav-button" data-view="review">Review</button>
             </div>
           </div>
-          <div class="nav-group" data-nav-group="projectManagement">
-            <button class="nav-group-toggle" type="button" data-nav-group-toggle="projectManagement" aria-expanded="true">Project Management</button>
+          <div class="nav-group collapsed" data-nav-group="projectManagement">
+            <button class="nav-group-toggle" type="button" data-nav-group-toggle="projectManagement" aria-expanded="false">Project Management</button>
             <div class="nav-subnav">
               <button class="nav-button" data-view="schedule">Schedule</button>
               <button class="nav-button" data-view="selections">Project Info</button>
@@ -66,8 +65,8 @@
               <button class="nav-button" data-view="warranty">Warranty</button>
             </div>
           </div>
-          <div class="nav-group" data-nav-group="financial">
-            <button class="nav-group-toggle" type="button" data-nav-group-toggle="financial" aria-expanded="true">Financial</button>
+          <div class="nav-group collapsed" data-nav-group="financial">
+            <button class="nav-group-toggle" type="button" data-nav-group-toggle="financial" aria-expanded="false">Financial</button>
             <div class="nav-subnav">
               <button class="nav-button" data-view="billingStages">Billing Stages</button>
               <button class="nav-button" data-view="purchaseOrders">Purchase Orders</button>
@@ -75,6 +74,7 @@
               <button class="nav-button" data-view="allowances">Allowances</button>
             </div>
           </div>
+          <button class="nav-button" data-view="management" data-permission="management">Management</button>
         </nav>
 
       </aside>
@@ -117,13 +117,37 @@
             <h2 id="viewTitle">CRM Pipeline</h2>
           </div>
           <div class="topbar-actions">
-            <div class="user-chip">
-              <span id="activeUserName">Not signed in</span>
-              <small id="activeUserRole">No role</small>
+            <div class="account-menu">
+              <button id="accountMenuBtn" class="user-chip" type="button" aria-expanded="false">
+                <span id="activeUserName">Not signed in</span>
+                <small id="activeUserRole">No role</small>
+              </button>
+              <section id="accountPanel" class="account-panel" hidden>
+                <div class="account-panel-head">
+                  <strong>Account</strong>
+                  <button id="closeAccountPanelBtn" class="secondary icon-button" type="button" title="Close account panel">x</button>
+                </div>
+                <label>
+                  Name
+                  <input id="accountName" />
+                </label>
+                <label>
+                  Email
+                  <input id="accountEmail" type="email" />
+                </label>
+                <label>
+                  Phone
+                  <input id="accountPhone" />
+                </label>
+                <label>
+                  Role
+                  <input id="accountRole" readonly />
+                </label>
+                <div class="account-panel-actions">
+                  <button id="logoutBtn" type="button">Sign out</button>
+                </div>
+              </section>
             </div>
-            <button id="resetBtn" class="secondary">Reset</button>
-            <button id="exportBtn">Export summary</button>
-            <button id="logoutBtn" class="secondary" type="button">Sign out</button>
           </div>
         </header>
 
@@ -293,6 +317,40 @@
                   <textarea id="outputExclusions" rows="8"></textarea>
                 </label>
                 <button id="printOutputBtn" type="button">Print / save PDF</button>
+              </section>
+              <section class="crm-card">
+                <h3>Additional Scope Items</h3>
+                <label>
+                  Scope section
+                  <select id="outputScopeSection"></select>
+                </label>
+                <label>
+                  Proposal / contract description
+                  <textarea id="outputScopeDescription" rows="3" placeholder="e.g. 9' walls - main floor"></textarea>
+                </label>
+                <div class="scope-item-options">
+                  <label>
+                    Order
+                    <input id="outputScopeSort" type="number" value="10" step="1" />
+                  </label>
+                  <label>
+                    Indent
+                    <select id="outputScopeIndent">
+                      <option value="0">Main bullet</option>
+                      <option value="1">Sub-bullet</option>
+                    </select>
+                  </label>
+                  <label class="check-row">
+                    <input id="outputScopeProposal" type="checkbox" checked />
+                    <span>Proposal</span>
+                  </label>
+                  <label class="check-row">
+                    <input id="outputScopeContract" type="checkbox" checked />
+                    <span>Contract</span>
+                  </label>
+                </div>
+                <button id="addOutputScopeItemBtn" type="button">Add scope item</button>
+                <div id="outputScopeItemsList" class="scope-items-list"></div>
               </section>
               <section class="crm-card">
                 <h3>Customer Wording</h3>
@@ -547,8 +605,7 @@
                 <div class="crm-form">
                   <label>
                     Project
-                    <input id="scheduleEditProjectName" list="scheduleProjectOptions" placeholder="Start typing a project name" />
-                    <datalist id="scheduleProjectOptions"></datalist>
+                    <select id="scheduleEditProjectName"></select>
                   </label>
                   <label>
                     Milestone
@@ -570,7 +627,11 @@
                   </label>
                   <label>
                     Company
-                    <input id="scheduleEditSubtrade" placeholder="Subtrade company name" />
+                    <select id="scheduleEditSubtrade"></select>
+                  </label>
+                  <label>
+                    Purchase order
+                    <select id="scheduleEditPurchaseOrder"></select>
                   </label>
                   <label>
                     Start date
@@ -797,6 +858,49 @@
             </div>
             <div id="crmBillingStages" class="billing-stage-groups"></div>
           </section>
+          <section class="crm-card billing-report-card">
+            <div class="crm-card-head">
+              <h3>All Project Billing Report</h3>
+              <button id="printBillingReportBtn" class="secondary mini-button" type="button">Print report</button>
+            </div>
+            <div class="billing-report-summary">
+              <div><span>Ready to invoice</span><strong id="billingReportReadyTotal">$0</strong></div>
+              <div><span>Outstanding</span><strong id="billingReportOutstandingTotal">$0</strong></div>
+              <div><span>Paid</span><strong id="billingReportPaidTotal">$0</strong></div>
+              <div><span>Upcoming</span><strong id="billingReportUpcomingTotal">$0</strong></div>
+            </div>
+            <div class="section-toolbar compact-toolbar">
+              <label>
+                Show
+                <select id="billingReportFilter">
+                  <option value="all">All billing stages</option>
+                  <option value="ready">Ready to invoice</option>
+                  <option value="outstanding">Outstanding</option>
+                  <option value="paid">Paid</option>
+                  <option value="upcoming">Upcoming</option>
+                </select>
+              </label>
+            </div>
+            <div class="billing-report-table-wrap">
+              <table class="billing-report-table">
+                <thead>
+                  <tr>
+                    <th>Project</th>
+                    <th>Customer</th>
+                    <th>Stage</th>
+                    <th>Status</th>
+                    <th>Completed</th>
+                    <th>Amount</th>
+                    <th>Owing</th>
+                    <th>Notes</th>
+                    <th>Invoice</th>
+                  </tr>
+                </thead>
+                <tbody id="billingReportBody"></tbody>
+              </table>
+            </div>
+          </section>
+          <section id="billingPrintArea" class="billing-print-area"></section>
         </section>
 
         <section id="jobFilesView" class="view">
@@ -913,16 +1017,22 @@
 
         <section id="purchaseOrdersView" class="view">
           <div class="order-summary">
-            <div><span>Purchase orders</span><strong id="purchaseOrderCount">0</strong></div>
-            <div><span>Open value</span><strong id="purchaseOrderOpenTotal">$0</strong></div>
-            <div><span>Issued value</span><strong id="purchaseOrderIssuedTotal">$0</strong></div>
+            <button type="button" data-purchase-order-filter="all"><span>Purchase orders</span><strong id="purchaseOrderCount">0</strong></button>
+            <button type="button" data-purchase-order-filter="open"><span>Open value</span><strong id="purchaseOrderOpenTotal">$0</strong></button>
+            <button type="button" data-purchase-order-filter="issued"><span>Issued value</span><strong id="purchaseOrderIssuedTotal">$0</strong></button>
+          </div>
+          <div class="section-toolbar compact-toolbar">
+            <label>
+              Project
+              <select id="purchaseOrderProjectFilter"></select>
+            </label>
           </div>
           <section class="crm-card order-form">
             <h3>Add / Edit Purchase Order</h3>
             <div class="order-form-grid">
               <label>
                 Vendor / supplier
-                <input id="purchaseOrderVendor" placeholder="Company name" />
+                <select id="purchaseOrderVendor"></select>
               </label>
               <label>
                 Trade / category
@@ -950,12 +1060,17 @@
               Notes
               <textarea id="purchaseOrderNotes" rows="3" placeholder="PO details, materials, delivery notes"></textarea>
             </label>
-            <button id="addPurchaseOrderBtn" type="button">Add purchase order</button>
+            <div class="order-form-actions">
+              <button id="addPurchaseOrderBtn" type="button">Add purchase order</button>
+              <button id="printPurchaseOrderBtn" class="secondary" type="button" disabled>Print selected PO</button>
+            </div>
           </section>
+          <p id="purchaseOrderOverviewLabel" class="helper-note">Showing all purchase orders.</p>
           <div class="order-table-wrap">
             <table class="order-table">
               <thead>
                 <tr>
+                  <th>Project</th>
                   <th>PO #</th>
                   <th>Vendor</th>
                   <th>Trade</th>
@@ -963,11 +1078,13 @@
                   <th>Needed</th>
                   <th>Status</th>
                   <th>Notes</th>
+                  <th>Print</th>
                 </tr>
               </thead>
               <tbody id="purchaseOrdersBody"></tbody>
             </table>
           </div>
+          <section id="purchaseOrderPrintArea" class="purchase-order-print-area"></section>
         </section>
 
         <section id="changeOrdersView" class="view">
@@ -984,8 +1101,8 @@
                 <input id="changeOrderTitle" placeholder="Scope change title" />
               </label>
               <label>
-                Requested by
-                <input id="changeOrderRequestedBy" placeholder="Customer, sales, production" />
+                Vendor / supplier
+                <select id="changeOrderRequestedBy"></select>
               </label>
               <label>
                 Amount
@@ -1018,7 +1135,7 @@
                 <tr>
                   <th>CO #</th>
                   <th>Title</th>
-                  <th>Requested by</th>
+                  <th>Vendor / supplier</th>
                   <th>Amount</th>
                   <th>Date</th>
                   <th>Status</th>
@@ -1055,6 +1172,35 @@
                 </thead>
                 <tbody id="warrantyProjectsBody"></tbody>
               </table>
+            </div>
+          </section>
+
+          <section class="crm-card warranty-card warranty-admin-card">
+            <div class="crm-card-head">
+              <h3>New Home Warranty Administration</h3>
+              <span class="billing-stage-summary">For the selected warranty project</span>
+            </div>
+            <div class="warranty-admin-grid">
+              <div>
+                <span>Project</span>
+                <strong id="warrantyAdminProject">-</strong>
+              </div>
+              <div>
+                <span>Client</span>
+                <strong id="warrantyAdminCustomer">-</strong>
+              </div>
+              <div>
+                <span>Project started</span>
+                <strong id="warrantyAdminStarted">-</strong>
+              </div>
+              <label>
+                New Home Warranty start
+                <input id="warrantyNewHomeStartDate" type="date" />
+              </label>
+              <label class="check-row warranty-admin-check">
+                <input id="warrantyPaperworkSent" type="checkbox" />
+                <span>Paperwork completed and sent in</span>
+              </label>
             </div>
           </section>
 
@@ -1166,6 +1312,8 @@
       </div>
     </section>
 
+    <datalist id="vendorCompanyOptions"></datalist>
+
     <section id="jobFilePreviewModal" class="document-modal" hidden>
       <div class="document-modal-backdrop" data-close-job-file-preview></div>
       <div class="file-preview-shell">
@@ -1183,6 +1331,6 @@
       </div>
     </section>
 
-    <script src="./app.js?v=sticky-left-navigation"></script>
+    <script src="./app.js?v=schedule-po-match-select"></script>
   </body>
 </html>

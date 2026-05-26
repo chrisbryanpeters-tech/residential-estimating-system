@@ -64,6 +64,7 @@ const state = {
     descriptions: {},
     manual: {},
     descriptionsManual: {},
+    scopeItems: [],
   },
   contract: {
     date: "",
@@ -84,6 +85,8 @@ const state = {
   },
   purchaseOrders: [],
   selectedPurchaseOrderId: "",
+  purchaseOrderFilter: "all",
+  purchaseOrderProjectFilter: "current",
   changeOrders: [],
   selectedChangeOrderId: "",
   jobFiles: [],
@@ -109,6 +112,8 @@ const state = {
   managementBreakdown: null,
   auth: {
     currentUser: null,
+    profiles: {},
+    accountPanelOpen: false,
   },
   view: "crm",
 };
@@ -247,6 +252,12 @@ const billingStageTemplate = [
 ];
 
 const billingStageStatuses = ["Not started", "Complete", "Invoiced", "Paid"];
+const billingReportStatuses = {
+  ready: "Ready to invoice",
+  outstanding: "Outstanding",
+  paid: "Paid",
+  upcoming: "Upcoming",
+};
 
 const defaultOutputExclusions = [
   "Engineering review - additional material and labor requirements",
@@ -275,6 +286,8 @@ const outputGroups = [
   { title: "Plumbing", sections: ["Plumbing/Mechanical"] },
   { title: "Base Moving Costs", sections: ["Miscellaneous", "Project Costs"], include: ["moving", "move", "delivery", "deliveries", "transport"] },
 ];
+
+const proposalSectionTitles = [...outputGroups.map((group) => group.title), "Other Included Items", "Value Added Opportunities"];
 
 const contractInclusionOptions = [
   "Project drawings and specifications attached to this agreement",
@@ -851,25 +864,33 @@ function sectionMargin(sectionName) {
 
 function createEstimateLines({ blank = false } = {}) {
   const inputs = projectInputs();
-  return state.library.line_items.map((item, index) => ({
-    id: `${item.section_sort}-${item.source_row}-${index}`,
-    section: item.section,
-    sourceRow: item.source_row,
-    code: item.cost_code || "",
-    category: defaultLineType(item),
-    description: cleanDefaultDescription(item.description || ""),
-    customerDescription: "",
-    note: item.pricing_note || "",
-    quantity: blank ? "" : resolveDefaultQuantity(item.default_quantity, inputs),
-    quantitySource: quantitySource(item.default_quantity),
-    quantityManual: blank,
-    unit: item.unit || "Package",
-    unitCost: blank ? "" : typeof item.default_unit_cost === "number" ? item.default_unit_cost : 0,
-    margin: blank ? "" : sectionMargin(item.section),
-    pst: item.tax_pst_default !== false,
-    gst: item.tax_gst_default !== false,
-    visible: item.customer_visible_default !== false,
-  }));
+  return state.library.line_items.map((item, index) => {
+    const line = {
+      id: `${item.section_sort}-${item.source_row}-${index}`,
+      section: item.section,
+      sourceRow: item.source_row,
+      code: item.cost_code || "",
+      category: defaultLineType(item),
+      description: cleanDefaultDescription(item.description || ""),
+      customerDescription: "",
+      note: item.pricing_note || "",
+      quantity: blank ? "" : resolveDefaultQuantity(item.default_quantity, inputs),
+      quantitySource: quantitySource(item.default_quantity),
+      quantityManual: blank,
+      unit: item.unit || "Package",
+      unitCost: blank ? "" : typeof item.default_unit_cost === "number" ? item.default_unit_cost : 0,
+      margin: blank ? "" : sectionMargin(item.section),
+      pst: item.tax_pst_default !== false,
+      gst: item.tax_gst_default !== false,
+      visible: item.customer_visible_default !== false,
+      includeProposal: item.customer_visible_default !== false,
+      includeContract: item.customer_visible_default !== false,
+      proposalSort: (index + 1) * 10,
+      proposalIndent: 0,
+    };
+    line.proposalSection = defaultProposalSection(line);
+    return line;
+  });
 }
 
 function hydrateLines() {
@@ -897,6 +918,11 @@ function serializeEstimateState() {
       category: line.category,
       description: line.description,
       customerDescription: line.customerDescription || "",
+      proposalSection: line.proposalSection || defaultProposalSection(line),
+      proposalSort: num(line.proposalSort),
+      proposalIndent: num(line.proposalIndent),
+      includeProposal: line.includeProposal !== false,
+      includeContract: line.includeContract !== false,
       quantity: line.quantity === "" ? "" : num(line.quantity),
       quantitySource: line.quantitySource || "",
       quantityManual: Boolean(line.quantityManual),
@@ -925,6 +951,11 @@ function restoreEstimateState(estimate) {
       category: saved.category || line.category,
       description: saved.description || line.description,
       customerDescription: saved.customerDescription || "",
+      proposalSection: saved.proposalSection || line.proposalSection || defaultProposalSection(line),
+      proposalSort: saved.proposalSort === "" || saved.proposalSort === undefined ? line.proposalSort : num(saved.proposalSort),
+      proposalIndent: saved.proposalIndent === "" || saved.proposalIndent === undefined ? 0 : num(saved.proposalIndent),
+      includeProposal: saved.includeProposal !== undefined ? Boolean(saved.includeProposal) : line.includeProposal !== false,
+      includeContract: saved.includeContract !== undefined ? Boolean(saved.includeContract) : line.includeContract !== false,
       quantity: saved.quantity === "" ? "" : num(saved.quantity),
       quantitySource: saved.quantitySource ?? line.quantitySource,
       quantityManual: saved.quantityManual !== undefined ? Boolean(saved.quantityManual) : true,
@@ -1037,6 +1068,11 @@ function estimateSnapshot() {
         category: line.category,
         description: line.description,
         customerDescription: line.customerDescription || "",
+        proposalSection: line.proposalSection || defaultProposalSection(line),
+        proposalSort: num(line.proposalSort),
+        proposalIndent: num(line.proposalIndent),
+        includeProposal: line.includeProposal !== false,
+        includeContract: line.includeContract !== false,
         quantity: num(line.quantity),
         unit: line.unit,
         unitCost: num(line.unitCost),
@@ -1050,7 +1086,24 @@ function estimateSnapshot() {
   return {
     totals,
     lines,
-    fingerprint: JSON.stringify(lines.map((line) => [line.id, line.description, line.customerDescription, line.quantity, line.unit, line.unitCost, line.margin, line.pst, line.gst])),
+    fingerprint: JSON.stringify(
+      lines.map((line) => [
+        line.id,
+        line.description,
+        line.customerDescription,
+        line.proposalSection,
+        line.proposalSort,
+        line.proposalIndent,
+        line.includeProposal,
+        line.includeContract,
+        line.quantity,
+        line.unit,
+        line.unitCost,
+        line.margin,
+        line.pst,
+        line.gst,
+      ]),
+    ),
   };
 }
 
@@ -1191,6 +1244,31 @@ function renderLineTable(sectionName) {
                 <td class="desc">
                   <input data-field="description" value="${escapeAttr(line.description)}" />
                   <textarea class="line-customer-description" data-field="customerDescription" rows="2" placeholder="Proposal / contract description">${escapeAttr(line.customerDescription || "")}</textarea>
+                  <div class="line-scope-controls">
+                    <label>
+                      Scope section
+                      <select data-field="proposalSection">${proposalSectionOptionsHtml(line.proposalSection || defaultProposalSection(line))}</select>
+                    </label>
+                    <label>
+                      Order
+                      <input data-field="proposalSort" type="number" value="${line.proposalSort ?? ""}" step="1" />
+                    </label>
+                    <label>
+                      Indent
+                      <select data-field="proposalIndent">
+                        <option value="0" ${num(line.proposalIndent) === 0 ? "selected" : ""}>Main bullet</option>
+                        <option value="1" ${num(line.proposalIndent) === 1 ? "selected" : ""}>Sub-bullet</option>
+                      </select>
+                    </label>
+                    <label class="line-check">
+                      <input data-field="includeProposal" type="checkbox" ${line.includeProposal !== false ? "checked" : ""} />
+                      Proposal
+                    </label>
+                    <label class="line-check">
+                      <input data-field="includeContract" type="checkbox" ${line.includeContract !== false ? "checked" : ""} />
+                      Contract
+                    </label>
+                  </div>
                   <div class="line-tools">
                     ${line.note ? `<span class="note">${line.note}</span>` : "<span></span>"}
                     ${
@@ -1874,6 +1952,7 @@ function renderEstimateVersions() {
               </div>
               <div class="estimate-version-actions">
                 <button class="secondary mini-button" type="button" data-open-estimate-version="${version.id}">Open</button>
+                <button class="secondary mini-button" type="button" data-load-estimate-version="${version.id}">Load</button>
                 <button class="secondary mini-button" type="button" data-rename-estimate-version="${version.id}">Rename</button>
                 <button class="secondary mini-button" type="button" data-mark-estimate-sent="${version.id}">
                   ${version.id === state.sentEstimateVersionId ? "Sent" : "Mark sent"}
@@ -1919,6 +1998,15 @@ function markEstimateVersionSent(versionId) {
   renderEstimateOutput();
 }
 
+function defaultProposalSection(line) {
+  return outputGroupForLine(line)?.title || "Other Included Items";
+}
+
+function proposalSectionOptionsHtml(selected = "") {
+  const value = selected || "Other Included Items";
+  return proposalSectionTitles.map((title) => `<option ${value === title ? "selected" : ""}>${escapeAttr(title)}</option>`).join("");
+}
+
 function renameEstimateVersion(versionId) {
   const version = state.estimateVersions?.find((item) => item.id === versionId);
   if (!version) return;
@@ -1929,8 +2017,21 @@ function renameEstimateVersion(versionId) {
   renderEstimateVersions();
 }
 
+function loadEstimateVersion(versionId) {
+  const version = state.estimateVersions?.find((item) => item.id === versionId);
+  if (!version) return;
+  const ok = window.confirm(`Load ${version.versionName || "this version"} into the working estimate? This replaces the current working estimate lines.`);
+  if (!ok) return;
+  restoreEstimateState({ lines: version.lines || [] });
+  state.output.estimateVersionId = "current";
+  state.contract.estimateVersionId = "current";
+  state.openEstimateVersionId = "";
+  saveActiveCrmRecordEdits();
+  render();
+}
+
 function loggedInSalespersonName() {
-  return state.auth.currentUser?.name || els.crmSalesperson?.value || "";
+  return currentUserProfile()?.name || els.crmSalesperson?.value || "";
 }
 
 function openEstimateVersion(versionId) {
@@ -2035,7 +2136,49 @@ function outputState() {
   }
   if (!state.output.manual.exclusions) state.output.exclusions = defaultOutputExclusions;
   if (!state.output.descriptions) state.output.descriptions = {};
+  state.output.scopeItems = normalizeOutputScopeItems(state.output.scopeItems);
   return state.output;
+}
+
+function normalizeOutputScopeItems(items) {
+  const source = Array.isArray(items) ? items : [];
+  return source.map((item, index) => ({
+    id: item.id || `scope-item-${Date.now()}-${index}`,
+    description: item.description || "",
+    proposalSection: item.proposalSection || "Framing Package",
+    proposalSort: item.proposalSort === "" || item.proposalSort === undefined ? (index + 1) * 10 : num(item.proposalSort),
+    proposalIndent: num(item.proposalIndent),
+    includeProposal: item.includeProposal !== false,
+    includeContract: item.includeContract !== false,
+  }));
+}
+
+function outputScopeItemAsLine(item) {
+  return {
+    id: item.id,
+    section: "Additional Scope",
+    description: item.description,
+    customerDescription: item.description,
+    proposalSection: item.proposalSection,
+    proposalSort: item.proposalSort,
+    proposalIndent: item.proposalIndent,
+    includeProposal: item.includeProposal,
+    includeContract: item.includeContract,
+    quantity: "",
+    unit: "",
+    retail: 0,
+    total: 0,
+    visible: true,
+    customScopeItem: true,
+  };
+}
+
+function outputScopeLines(filter = "proposal") {
+  const output = outputState();
+  return output.scopeItems
+    .filter((item) => item.description.trim())
+    .filter((item) => (filter === "contract" ? item.includeContract !== false : item.includeProposal !== false))
+    .map(outputScopeItemAsLine);
 }
 
 function proposalVersionOptions(selectedId) {
@@ -2066,7 +2209,8 @@ function selectedProposalEstimate() {
 }
 
 function proposalLines(estimate = selectedProposalEstimate()) {
-  return estimate.lines.filter((line) => (line.visible === undefined || line.visible) && num(line.retail) > 0);
+  return [...estimate.lines.filter((line) => (line.visible === undefined || line.visible) && line.includeProposal !== false), ...outputScopeLines("proposal")]
+    .sort((a, b) => num(a.proposalSort, 9999) - num(b.proposalSort, 9999) || String(a.description).localeCompare(String(b.description)));
 }
 
 function formatQuantity(value) {
@@ -2077,12 +2221,9 @@ function formatQuantity(value) {
 function lineOutputText(line) {
   if (!state.output.descriptions) state.output.descriptions = {};
   if (!state.output.descriptionsManual) state.output.descriptionsManual = {};
-  if (state.output.descriptionsManual[line.id]) return state.output.descriptions[line.id] || "";
   if (String(line.customerDescription || "").trim()) return String(line.customerDescription).trim();
-  const qty = num(line.quantity);
-  const unit = String(line.unit || "").trim();
-  const prefix = qty > 0 && !["package", "allowance", ""].includes(unit.toLowerCase()) ? `${formatQuantity(qty)} ${unit} - ` : "";
-  return `${prefix}${line.description}`;
+  if (state.output.descriptionsManual[line.id]) return state.output.descriptions[line.id] || "";
+  return line.description || "";
 }
 
 function outputGroupForLine(line) {
@@ -2102,11 +2243,11 @@ function outputGroupForLine(line) {
 }
 
 function groupedProposalLines(estimate = selectedProposalEstimate()) {
-  const groups = outputGroups.map((group) => ({ title: group.title, lines: [] }));
+  const groups = proposalSectionTitles.map((title) => ({ title, lines: [] }));
   const other = { title: "Other Included Items", lines: [] };
   proposalLines(estimate).forEach((line) => {
-    const group = outputGroupForLine(line);
-    const target = groups.find((item) => item.title === group?.title) || other;
+    const title = line.proposalSection || outputGroupForLine(line)?.title || "Other Included Items";
+    const target = groups.find((item) => item.title === title) || other;
     target.lines.push(line);
   });
   return [...groups.filter((group) => group.lines.length), ...(other.lines.length ? [other] : [])];
@@ -2131,6 +2272,7 @@ function renderEstimateOutput() {
   els.outputIntro.value = output.intro;
   els.outputMovingNotes.value = output.movingNotes;
   els.outputExclusions.value = output.exclusions;
+  renderOutputScopeItems();
 
   els.outputLineEditor.innerHTML = proposalLines(estimate)
     .map(
@@ -2150,7 +2292,7 @@ function renderEstimateOutput() {
           <section class="proposal-section">
             <h4>${escapeAttr(group.title)}</h4>
             <ul>
-              ${group.lines.map((line) => `<li>${escapeAttr(lineOutputText(line))}</li>`).join("")}
+              ${group.lines.map((line) => `<li class="${num(line.proposalIndent) > 0 ? "proposal-subitem" : ""}">${escapeAttr(lineOutputText(line))}</li>`).join("")}
             </ul>
           </section>
         `,
@@ -2205,6 +2347,96 @@ function renderEstimateOutput() {
     <p class="proposal-fine-print">Estimate provided is quoted as a complete project in substance. Any extra charges not included in this quotation, whether agreed to verbally or in writing, will be billed direct and are over and above the amount quoted herein.</p>
   `;
   els.proposalPreview.innerHTML = [pageShell(1, 3, pageOne, true), pageShell(2, 3, pageTwo), pageShell(3, 3, pageThree)].join("");
+}
+
+function renderOutputScopeItems() {
+  if (!els.outputScopeItemsList) return;
+  const output = outputState();
+  els.outputScopeSection.innerHTML = proposalSectionOptionsHtml(els.outputScopeSection.value || "Framing Package");
+  els.outputScopeItemsList.innerHTML = output.scopeItems.length
+    ? output.scopeItems
+        .map(
+          (item) => `
+            <article class="scope-item-row" data-output-scope-item="${escapeAttr(item.id)}">
+              <label>
+                Section
+                <select data-output-scope-field="proposalSection">${proposalSectionOptionsHtml(item.proposalSection)}</select>
+              </label>
+              <label>
+                Description
+                <textarea data-output-scope-field="description" rows="2">${escapeAttr(item.description)}</textarea>
+              </label>
+              <label>
+                Order
+                <input data-output-scope-field="proposalSort" type="number" value="${item.proposalSort}" step="1" />
+              </label>
+              <label>
+                Indent
+                <select data-output-scope-field="proposalIndent">
+                  <option value="0" ${num(item.proposalIndent) === 0 ? "selected" : ""}>Main bullet</option>
+                  <option value="1" ${num(item.proposalIndent) === 1 ? "selected" : ""}>Sub-bullet</option>
+                </select>
+              </label>
+              <label class="check-row">
+                <input data-output-scope-field="includeProposal" type="checkbox" ${item.includeProposal !== false ? "checked" : ""} />
+                <span>Proposal</span>
+              </label>
+              <label class="check-row">
+                <input data-output-scope-field="includeContract" type="checkbox" ${item.includeContract !== false ? "checked" : ""} />
+                <span>Contract</span>
+              </label>
+              <button class="secondary mini-button" type="button" data-delete-output-scope-item="${escapeAttr(item.id)}">Delete</button>
+            </article>
+          `,
+        )
+        .join("")
+    : `<p class="empty-note">No added scope items yet.</p>`;
+}
+
+function addOutputScopeItem() {
+  const output = outputState();
+  const description = els.outputScopeDescription.value.trim();
+  if (!description) return;
+  output.scopeItems.push({
+    id: `scope-item-${Date.now()}`,
+    description,
+    proposalSection: els.outputScopeSection.value || "Framing Package",
+    proposalSort: els.outputScopeSort.value === "" ? (output.scopeItems.length + 1) * 10 : num(els.outputScopeSort.value),
+    proposalIndent: num(els.outputScopeIndent.value),
+    includeProposal: els.outputScopeProposal.checked,
+    includeContract: els.outputScopeContract.checked,
+  });
+  els.outputScopeDescription.value = "";
+  els.outputScopeSort.value = String((output.scopeItems.length + 1) * 10);
+  els.outputScopeIndent.value = "0";
+  els.outputScopeProposal.checked = true;
+  els.outputScopeContract.checked = true;
+  renderEstimateOutput();
+  renderContract();
+  saveActiveCrmRecordEdits();
+}
+
+function handleOutputScopeItemEdit(event) {
+  const row = event.target.closest("[data-output-scope-item]");
+  const field = event.target.dataset.outputScopeField;
+  const item = outputState().scopeItems.find((entry) => entry.id === row?.dataset.outputScopeItem);
+  if (!item || !field) return;
+  if (event.target.type === "checkbox") item[field] = event.target.checked;
+  else if (["proposalSort", "proposalIndent"].includes(field)) item[field] = event.target.value === "" ? "" : num(event.target.value);
+  else item[field] = event.target.value;
+  if (event.type === "change") {
+    renderEstimateOutput();
+    renderContract();
+  }
+  saveActiveCrmRecordEdits();
+}
+
+function deleteOutputScopeItem(itemId) {
+  const output = outputState();
+  output.scopeItems = output.scopeItems.filter((item) => item.id !== itemId);
+  renderEstimateOutput();
+  renderContract();
+  saveActiveCrmRecordEdits();
 }
 
 function contractState() {
@@ -2363,7 +2595,10 @@ function renderContract() {
   const estimate = selectedContractEstimate();
   const included = contractInclusionOptions.filter((item) => contract.inclusions[item]);
   const excluded = contractExclusionOptions.filter((item) => contract.exclusions[item]);
-  const activeLines = estimate.lines.filter((line) => line.total > 0);
+  const activeLines = estimate.lines
+    .filter((line) => line.includeContract !== false)
+    .concat(outputScopeLines("contract"))
+    .sort((a, b) => num(a.proposalSort, 9999) - num(b.proposalSort, 9999) || String(a.description).localeCompare(String(b.description)));
   const approved = isContractApproved();
   const staleApproval = contract.approval.status === "Approved" && !approved;
   const approvalDate = contract.approval.approvedAt ? new Date(contract.approval.approvedAt).toLocaleString("en-CA") : "";
@@ -2397,10 +2632,10 @@ function renderContract() {
     .map(
       (line) => `
         <tr>
-          <td>${escapeAttr(line.description)}</td>
-          <td>${formatQuantity(line.quantity)}</td>
+          <td>${escapeAttr(line.customerDescription || line.description)}</td>
+          <td>${line.customScopeItem ? "" : formatQuantity(line.quantity)}</td>
           <td>${escapeAttr(line.unit || "")}</td>
-          <td>${money.format(line.total)}</td>
+          <td>${line.customScopeItem ? "" : money.format(line.total)}</td>
         </tr>
       `,
     )
@@ -2458,6 +2693,10 @@ function renderContract() {
 
 function handleOutputEdit(event) {
   const output = outputState();
+  if (event.target.closest("[data-output-scope-item]")) {
+    handleOutputScopeItemEdit(event);
+    return;
+  }
   if (event.target.dataset.outputDescription) {
     output.descriptions[event.target.dataset.outputDescription] = event.target.value;
     output.descriptionsManual[event.target.dataset.outputDescription] = true;
@@ -2793,6 +3032,7 @@ function createScheduleItems(startDate = todayIso()) {
     department: item.department,
     trade: item.trade || item.department,
     subtrade: "",
+    purchaseOrderId: "",
     targetDate: addDaysIso(startDate, item.offset),
     endDate: addDaysIso(startDate, item.offset),
     status: index === 0 ? "In progress" : "Not started",
@@ -2811,6 +3051,7 @@ function ensureSchedule() {
   state.schedule.items.forEach((item) => {
     if (!item.trade) item.trade = item.department || "Production";
     if (item.subtrade === undefined) item.subtrade = "";
+    if (item.purchaseOrderId === undefined) item.purchaseOrderId = "";
     if (!item.endDate) item.endDate = item.targetDate || state.schedule.startDate;
     if (item.targetDate && item.endDate < item.targetDate) item.endDate = item.targetDate;
   });
@@ -2833,6 +3074,18 @@ function applyScheduleTemplate() {
 
 function tradeOptionsHtml(selected) {
   return scheduleTrades.map((trade) => `<option ${selected === trade ? "selected" : ""}>${trade}</option>`).join("");
+}
+
+function scheduleSubtradeOptionsHtml(selected = "", trade = "") {
+  const vendors = normalizeVendors(state.vendors)
+    .filter((vendor) => !trade || vendor.trade === trade)
+    .sort((a, b) => a.company.localeCompare(b.company));
+  const hasSelected = selected && !vendors.some((vendor) => companyMatches(vendor.company, selected));
+  return [
+    `<option value="">Unassigned</option>`,
+    ...(hasSelected ? [`<option value="${escapeAttr(selected)}" selected>${escapeAttr(selected)}</option>`] : []),
+    ...vendors.map((vendor) => `<option value="${escapeAttr(vendor.company)}" ${companyMatches(vendor.company, selected) ? "selected" : ""}>${escapeAttr(vendor.company)}</option>`),
+  ].join("");
 }
 
 function scheduleFilterValue(type = "all", trade = "", company = "") {
@@ -2999,11 +3252,46 @@ function calendarProjectRecords() {
     projectName: currentProjectName(),
     customerName: els.customerName?.value || "New Customer",
     schedule: state.schedule,
+    purchaseOrders: state.purchaseOrders,
   };
   if (state.schedule.scope !== "all") return [current];
   const saved = state.crm.records.filter((record) => record.schedule?.items?.length);
   const withoutCurrent = saved.filter((record) => record.id !== state.crm.activeRecordId);
   return [current, ...withoutCurrent];
+}
+
+function purchaseOrdersForScheduleItem(record, item) {
+  const itemTrade = item.trade || item.department || "";
+  const itemCompany = item.subtrade || "";
+  return normalizePurchaseOrders(record.purchaseOrders)
+    .filter((order) => order.status !== "Closed")
+    .filter((order) => order.trade === itemTrade || companyMatches(order.vendor, itemCompany));
+}
+
+function purchaseOrderById(record, purchaseOrderId) {
+  if (!purchaseOrderId) return null;
+  return normalizePurchaseOrders(record.purchaseOrders).find((order) => order.id === purchaseOrderId) || null;
+}
+
+function scheduleItemPurchaseOrders(record, item) {
+  const manualOrder = purchaseOrderById(record, item.purchaseOrderId);
+  return manualOrder ? [manualOrder] : purchaseOrdersForScheduleItem(record, item);
+}
+
+function schedulePurchaseOrderOptionsHtml(item) {
+  const orders = normalizePurchaseOrders(state.purchaseOrders).filter((order) => order.status !== "Closed");
+  const matches = purchaseOrdersForScheduleItem({ purchaseOrders: state.purchaseOrders }, item || {});
+  const selectedId = item?.purchaseOrderId || "";
+  const autoMatch = matches[0];
+  const autoLabel = autoMatch ? `Auto: ${autoMatch.number} - ${autoMatch.vendor || autoMatch.trade || "matched PO"}` : "Auto match by trade/vendor";
+  return [
+    `<option value="" ${selectedId ? "" : "selected"}>${escapeAttr(autoLabel)}</option>`,
+    ...orders.map((order) => {
+      const matchLabel = matches.some((match) => match.id === order.id) ? " (auto match)" : "";
+      const label = `${order.number} - ${order.vendor || "No vendor"} - ${order.trade || "No trade"}${matchLabel}`;
+      return `<option value="${escapeAttr(order.id)}" ${selectedId === order.id ? "selected" : ""}>${escapeAttr(label)}</option>`;
+    }),
+  ].join("");
 }
 
 function calendarItems() {
@@ -3021,6 +3309,7 @@ function calendarItems() {
         endDate: item.endDate || item.targetDate,
         projectId: record.id,
         projectName: record.projectName || "Project",
+        purchaseOrderNumbers: scheduleItemPurchaseOrders(record, item).map((order) => order.number),
         isCurrentProject: record.id === (state.crm.activeRecordId || "current") || record.id === "current",
       })),
   );
@@ -3355,7 +3644,8 @@ function calendarEventHtml(item, segment = {}) {
   const pendingClass = pending?.itemId === item.id && pending?.projectId === item.projectId ? `resizing-${pending.edge}` : "";
   const gridStyle =
     segment.startColumn && segment.endColumn ? `grid-column: ${segment.startColumn} / ${segment.endColumn}; --bar-row: ${segment.row || 1};` : "";
-  const label = `${item.projectName || "Project"}${item.name ? ` - ${item.name}` : ""}`;
+  const poLabel = item.purchaseOrderNumbers?.length ? ` - ${item.purchaseOrderNumbers.join(", ")}` : "";
+  const label = `${item.projectName || "Project"}${item.name ? ` - ${item.name}` : ""}${poLabel}`;
   return `
     <strong class="calendar-event ${segment.startColumn ? "calendar-bar" : ""} ${isRange ? "range-event" : ""} ${pendingClass} ${item.id === state.schedule.selectedItemId && item.isCurrentProject ? "active" : ""} ${item.isCurrentProject ? "" : "other-project"}" style="--event-color: ${projectColor(item.projectId)}; ${gridStyle}" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}" title="${escapeAttr(label)}">
       <button class="event-resize-handle event-resize-start" type="button" data-schedule-resize="start" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}" title="Drag or click, then choose a date"></button>
@@ -3460,10 +3750,11 @@ function renderSchedule() {
   els.scheduleScope.value = state.schedule.scope || "current";
   els.scheduleTradeFilter.innerHTML = scheduleTradeFilterOptionsHtml(state.schedule.tradeFilter);
   els.scheduleTradeFilter.value = normalizedScheduleFilterValue(state.schedule.tradeFilter);
-  els.scheduleProjectOptions.innerHTML = scheduleProjectOptions()
-    .map((option) => `<option value="${escapeAttr(option.projectName)}"></option>`)
-    .join("");
-  els.scheduleEditTrade.innerHTML = tradeOptionsHtml(selectedScheduleItem()?.trade || "Framing");
+  els.scheduleEditProjectName.innerHTML = projectOptionsHtml(state.crm.activeRecordId || "current");
+  const selectedForEditor = selectedScheduleItem();
+  els.scheduleEditTrade.innerHTML = tradeOptionsHtml(selectedForEditor?.trade || "Framing");
+  els.scheduleEditSubtrade.innerHTML = scheduleSubtradeOptionsHtml(selectedForEditor?.subtrade || "", selectedForEditor?.trade || selectedForEditor?.department || "Framing");
+  els.scheduleEditPurchaseOrder.innerHTML = schedulePurchaseOrderOptionsHtml(selectedForEditor);
   renderScheduleCalendar();
 
   const statuses = ["Not started", "In progress", "Waiting", "Complete"];
@@ -3484,7 +3775,11 @@ function renderSchedule() {
               ${tradeOptionsHtml(item.trade || item.department)}
             </select>
           </td>
-          <td><input data-schedule-field="subtrade" value="${escapeAttr(item.subtrade || "")}" placeholder="Subtrade company" /></td>
+          <td>
+            <select data-schedule-field="subtrade">
+              ${scheduleSubtradeOptionsHtml(item.subtrade || "", item.trade || item.department)}
+            </select>
+          </td>
           <td><input data-schedule-field="targetDate" type="date" value="${item.targetDate || ""}" /></td>
           <td><input data-schedule-field="endDate" type="date" value="${item.endDate || item.targetDate || ""}" /></td>
           <td>
@@ -3527,11 +3822,14 @@ function renderSchedule() {
 
   const selected = selectedScheduleItem();
   if (selected) {
-    els.scheduleEditProjectName.value = currentProjectName();
+    els.scheduleEditProjectName.value = state.crm.activeRecordId || "current";
     els.scheduleEditName.value = selected.name || "";
     els.scheduleEditDepartment.value = selected.department || "Production";
     els.scheduleEditTrade.value = selected.trade || selected.department || "Framing";
+    els.scheduleEditSubtrade.innerHTML = scheduleSubtradeOptionsHtml(selected.subtrade || "", selected.trade || selected.department || "Framing");
     els.scheduleEditSubtrade.value = selected.subtrade || "";
+    els.scheduleEditPurchaseOrder.innerHTML = schedulePurchaseOrderOptionsHtml(selected);
+    els.scheduleEditPurchaseOrder.value = selected.purchaseOrderId || "";
     els.scheduleEditDate.value = selected.targetDate || "";
     els.scheduleEditEndDate.value = selected.endDate || selected.targetDate || "";
     els.scheduleEditStatus.value = selected.status || "Not started";
@@ -3550,7 +3848,7 @@ function renderSchedule() {
         <button class="day-event-row" type="button" style="--event-color: ${projectColor(item.projectId)}" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}">
           <strong>${escapeAttr(item.name)}</strong>
           <span>${escapeAttr(item.projectName)} - ${escapeAttr(item.status)}</span>
-          <small>${escapeAttr(item.trade || item.department || "Schedule")}${item.subtrade ? ` / ${escapeAttr(item.subtrade)}` : ""}</small>
+          <small>${escapeAttr(item.trade || item.department || "Schedule")}${item.subtrade ? ` / ${escapeAttr(item.subtrade)}` : ""}${item.purchaseOrderNumbers?.length ? ` / ${escapeAttr(item.purchaseOrderNumbers.join(", "))}` : ""}</small>
         </button>
       `,
     )
@@ -3561,20 +3859,24 @@ function handleScheduleEdit(event) {
   ensureSchedule();
   if (event.target === els.scheduleStartDate) {
     state.schedule.startDate = event.target.value || todayIso();
+    saveActiveCrmRecordEdits();
     if (event.type === "change") renderSchedule();
     return;
   }
   if (event.target === els.scheduleOwner) {
     state.schedule.owner = event.target.value;
+    saveActiveCrmRecordEdits();
     return;
   }
   if (event.target === els.scheduleScope) {
     state.schedule.scope = event.target.value;
+    saveActiveCrmRecordEdits();
     if (event.type === "change") renderSchedule();
     return;
   }
   if (event.target === els.scheduleTradeFilter) {
     state.schedule.tradeFilter = event.target.value;
+    saveActiveCrmRecordEdits();
     if (event.type === "change") renderSchedule();
     return;
   }
@@ -3583,9 +3885,14 @@ function handleScheduleEdit(event) {
   const item = state.schedule.items.find((entry) => entry.id === row?.dataset.scheduleItem);
   if (!item || !field) return;
   item[field] = event.target.value;
-  if (field === "trade") item.subtrade = "";
+  if (field === "trade") {
+    item.subtrade = "";
+    const subtradeSelect = row.querySelector('[data-schedule-field="subtrade"]');
+    if (subtradeSelect) subtradeSelect.innerHTML = scheduleSubtradeOptionsHtml("", item.trade || item.department);
+  }
   if (field === "targetDate" && (!item.endDate || item.endDate < item.targetDate)) item.endDate = item.targetDate;
   if (field === "endDate" && item.endDate < item.targetDate) item.targetDate = item.endDate;
+  saveActiveCrmRecordEdits();
   if (event.type === "change") renderSchedule();
 }
 
@@ -3593,16 +3900,11 @@ function handleScheduleEditorEdit(event) {
   const selected = selectedScheduleItem();
   if (!selected) return;
   if (event.target.id === "scheduleEditProjectName") {
-    if (event.type === "input") return;
-    const projectName = event.target.value.trim();
-    const match = matchingScheduleProject(projectName);
-    if (match && !match.current) {
-      moveSelectedScheduleItemToProject(match.id);
+    const projectId = event.target.value;
+    if (projectId && projectId !== (state.crm.activeRecordId || "current")) {
+      moveSelectedScheduleItemToProject(projectId);
       return;
     }
-    els.projectName.value = projectName || "Current project";
-    render();
-    saveActiveCrmRecordEdits();
     return;
   }
   const fieldMap = {
@@ -3610,6 +3912,7 @@ function handleScheduleEditorEdit(event) {
     scheduleEditDepartment: "department",
     scheduleEditTrade: "trade",
     scheduleEditSubtrade: "subtrade",
+    scheduleEditPurchaseOrder: "purchaseOrderId",
     scheduleEditDate: "targetDate",
     scheduleEditEndDate: "endDate",
     scheduleEditStatus: "status",
@@ -3618,11 +3921,20 @@ function handleScheduleEditorEdit(event) {
   const field = fieldMap[event.target.id];
   if (!field) return;
   selected[field] = event.target.value;
-  if (field === "trade") selected.subtrade = "";
+  if (field === "trade") {
+    selected.subtrade = "";
+    els.scheduleEditSubtrade.innerHTML = scheduleSubtradeOptionsHtml("", selected.trade || selected.department);
+    els.scheduleEditSubtrade.value = "";
+  }
+  if ((field === "trade" || field === "subtrade") && !selected.purchaseOrderId) {
+    els.scheduleEditPurchaseOrder.innerHTML = schedulePurchaseOrderOptionsHtml(selected);
+    els.scheduleEditPurchaseOrder.value = "";
+  }
   if (field === "targetDate" && (!selected.endDate || selected.endDate < selected.targetDate)) selected.endDate = selected.targetDate;
   if (field === "endDate" && selected.endDate < selected.targetDate) selected.targetDate = selected.endDate;
   if (field === "targetDate" && event.target.value) state.schedule.calendarMonth = monthKey(event.target.value);
   if (field === "endDate" && event.target.value) state.schedule.calendarMonth = monthKey(selected.targetDate || event.target.value);
+  saveActiveCrmRecordEdits();
   if (event.type === "change") renderSchedule();
 }
 
@@ -3666,6 +3978,7 @@ function createScheduleItemOnDate(dateText) {
     department: "Production",
     trade: filter.type === "trade" || filter.type === "company" ? filter.trade : "Framing",
     subtrade: filter.type === "company" ? filter.company : "",
+    purchaseOrderId: "",
     targetDate: dateText,
     endDate: dateText,
     status: "Not started",
@@ -3674,6 +3987,7 @@ function createScheduleItemOnDate(dateText) {
   state.schedule.items.push(item);
   state.schedule.selectedItemId = id;
   state.schedule.editorOpen = true;
+  saveActiveCrmRecordEdits();
   renderSchedule();
 }
 
@@ -3720,9 +4034,16 @@ function syncNavGroups(view = state.view) {
     financial: ["billingStages", "purchaseOrders", "changeOrders", "allowances"],
   };
   document.querySelectorAll("[data-nav-group]").forEach((group) => {
-    if (groupViews[group.dataset.navGroup]?.includes(view)) {
-      group.classList.remove("collapsed");
-    }
+    const isActiveGroup = groupViews[group.dataset.navGroup]?.includes(view);
+    group.classList.toggle("collapsed", !isActiveGroup);
+    const toggle = document.querySelector(`[data-nav-group-toggle="${group.dataset.navGroup}"]`);
+    if (toggle) toggle.setAttribute("aria-expanded", String(!group.classList.contains("collapsed")));
+  });
+}
+
+function setOpenNavGroup(groupName) {
+  document.querySelectorAll("[data-nav-group]").forEach((group) => {
+    group.classList.toggle("collapsed", group.dataset.navGroup !== groupName);
     const toggle = document.querySelector(`[data-nav-group-toggle="${group.dataset.navGroup}"]`);
     if (toggle) toggle.setAttribute("aria-expanded", String(!group.classList.contains("collapsed")));
   });
@@ -3732,6 +4053,13 @@ function loadAuthSession() {
   if (!storageAvailable()) return;
   const userId = window.localStorage.getItem("zaksBuildOsCurrentUser");
   state.auth.currentUser = users.find((user) => user.id === userId) || null;
+  try {
+    const rawProfiles = window.localStorage.getItem("zaksBuildOsUserProfiles");
+    const parsedProfiles = rawProfiles ? JSON.parse(rawProfiles) : {};
+    state.auth.profiles = parsedProfiles && typeof parsedProfiles === "object" ? parsedProfiles : {};
+  } catch {
+    state.auth.profiles = {};
+  }
 }
 
 function persistAuthSession() {
@@ -3740,18 +4068,61 @@ function persistAuthSession() {
   else window.localStorage.removeItem("zaksBuildOsCurrentUser");
 }
 
+function persistUserProfiles() {
+  if (!storageAvailable()) return;
+  window.localStorage.setItem("zaksBuildOsUserProfiles", JSON.stringify(state.auth.profiles));
+}
+
+function currentUserProfile() {
+  const user = state.auth.currentUser;
+  if (!user) return null;
+  const saved = state.auth.profiles[user.id] || {};
+  return {
+    id: user.id,
+    name: saved.name || user.name,
+    role: user.role,
+    email: saved.email || "",
+    phone: saved.phone || "",
+  };
+}
+
 function renderAuth() {
   const isSignedIn = Boolean(state.auth.currentUser);
   document.body.classList.toggle("is-authenticated", isSignedIn);
   els.loginScreen?.toggleAttribute("hidden", isSignedIn);
   byId("app")?.toggleAttribute("hidden", !isSignedIn);
   if (!isSignedIn) return;
-  els.activeUserName.textContent = state.auth.currentUser.name;
-  els.activeUserRole.textContent = state.auth.currentUser.role;
+  const profile = currentUserProfile();
+  els.activeUserName.textContent = profile.name;
+  els.activeUserRole.textContent = profile.role;
+  if (els.accountName) els.accountName.value = profile.name;
+  if (els.accountEmail) els.accountEmail.value = profile.email;
+  if (els.accountPhone) els.accountPhone.value = profile.phone;
+  if (els.accountRole) els.accountRole.value = profile.role;
+  if (els.accountPanel) els.accountPanel.toggleAttribute("hidden", !state.auth.accountPanelOpen);
+  if (els.accountMenuBtn) els.accountMenuBtn.setAttribute("aria-expanded", String(state.auth.accountPanelOpen));
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.toggleAttribute("hidden", !hasPermission(button.dataset.view));
   });
   if (!hasPermission(state.view)) state.view = firstAllowedView();
+}
+
+function handleAccountEdit() {
+  const user = state.auth.currentUser;
+  if (!user) return;
+  state.auth.profiles[user.id] = {
+    ...(state.auth.profiles[user.id] || {}),
+    name: els.accountName.value.trim() || user.name,
+    email: els.accountEmail.value.trim(),
+    phone: els.accountPhone.value.trim(),
+  };
+  persistUserProfiles();
+  renderAuth();
+}
+
+function toggleAccountPanel(forceOpen = !state.auth.accountPanelOpen) {
+  state.auth.accountPanelOpen = Boolean(forceOpen);
+  renderAuth();
 }
 
 function handleLogin(event) {
@@ -3771,6 +4142,7 @@ function handleLogin(event) {
 
 function logout() {
   state.auth.currentUser = null;
+  state.auth.accountPanelOpen = false;
   persistAuthSession();
   renderAuth();
 }
@@ -3995,7 +4367,7 @@ function handleLineEdit(event) {
   if (!line || !field) return;
   if (event.target.type === "checkbox") {
     line[field] = event.target.checked;
-  } else if (["quantity", "unitCost", "margin"].includes(field)) {
+  } else if (["quantity", "unitCost", "margin", "proposalSort", "proposalIndent"].includes(field)) {
     line[field] = event.target.value === "" ? "" : num(event.target.value);
     if (field === "quantity") line.quantityManual = true;
   } else {
@@ -4103,6 +4475,42 @@ function vendorTradeOptionsHtml(selected = "Project Materials") {
   return options.map((trade) => `<option ${selected === trade ? "selected" : ""}>${escapeAttr(trade)}</option>`).join("");
 }
 
+function vendorCompanyOptionsHtml() {
+  return [
+    `<option value="">Select company</option>`,
+    ...normalizeVendors(state.vendors)
+      .slice()
+      .sort((a, b) => a.company.localeCompare(b.company))
+      .map((vendor) => `<option value="${escapeAttr(vendor.company)}">${escapeAttr(vendor.company)} - ${escapeAttr(vendor.trade)}</option>`),
+  ].join("");
+}
+
+function vendorByCompany(company) {
+  const value = String(company || "").trim().toLowerCase();
+  return normalizeVendors(state.vendors).find((vendor) => vendor.company.trim().toLowerCase() === value);
+}
+
+function syncVendorCompanyOptions() {
+  const html = vendorCompanyOptionsHtml();
+  const currentPurchaseOrderVendor = els.purchaseOrderVendor?.value || "";
+  const currentChangeOrderVendor = els.changeOrderRequestedBy?.value || "";
+  if (els.vendorCompanyOptions) els.vendorCompanyOptions.innerHTML = html;
+  if (els.purchaseOrderVendor) {
+    els.purchaseOrderVendor.innerHTML = html;
+    els.purchaseOrderVendor.value = currentPurchaseOrderVendor;
+  }
+  if (els.changeOrderRequestedBy) {
+    els.changeOrderRequestedBy.innerHTML = html;
+    els.changeOrderRequestedBy.value = currentChangeOrderVendor;
+  }
+}
+
+function applyPurchaseOrderVendorTrade() {
+  const vendor = vendorByCompany(els.purchaseOrderVendor?.value);
+  if (!vendor || !els.purchaseOrderTrade) return;
+  els.purchaseOrderTrade.innerHTML = orderTradeOptionsHtml(vendor.trade);
+}
+
 function normalizeVendors(items) {
   const source = Array.isArray(items) ? items : [];
   return source
@@ -4137,6 +4545,7 @@ function persistVendors() {
 function renderVendors() {
   if (!els.vendorsBody) return;
   state.vendors = normalizeVendors(state.vendors);
+  syncVendorCompanyOptions();
   els.vendorTrade.innerHTML = vendorTradeOptionsHtml(els.vendorTrade.value || "Project Materials");
   const tradeFilter = els.vendorTradeFilter.value || "All trades";
   els.vendorTradeFilter.innerHTML = [
@@ -4238,22 +4647,34 @@ function deleteVendor(vendorId) {
 function renderPurchaseOrders() {
   if (!els.purchaseOrdersBody) return;
   state.purchaseOrders = normalizePurchaseOrders(state.purchaseOrders);
+  const currentTrade = els.purchaseOrderTrade.value || "Project Materials";
+  syncVendorCompanyOptions();
   if (state.selectedPurchaseOrderId && !state.purchaseOrders.some((order) => order.id === state.selectedPurchaseOrderId)) state.selectedPurchaseOrderId = "";
-  els.purchaseOrderTrade.innerHTML = orderTradeOptionsHtml(els.purchaseOrderTrade.value || "Project Materials");
-  const openTotal = state.purchaseOrders
-    .filter((item) => !["Received", "Closed"].includes(item.status))
-    .reduce((sum, item) => sum + num(item.amount), 0);
-  const issuedTotal = state.purchaseOrders
-    .filter((item) => ["Issued", "Received", "Closed"].includes(item.status))
-    .reduce((sum, item) => sum + num(item.amount), 0);
-  els.purchaseOrderCount.textContent = String(state.purchaseOrders.length);
+  els.purchaseOrderTrade.innerHTML = orderTradeOptionsHtml(currentTrade);
+  if (!["all", "open", "issued"].includes(state.purchaseOrderFilter)) state.purchaseOrderFilter = "all";
+  syncPurchaseOrderProjectFilter();
+  const projectRows = filteredPurchaseOrderRows("all");
+  const visibleOrders = filteredPurchaseOrderRows(state.purchaseOrderFilter);
+  const openTotal = filteredPurchaseOrderRows("open").reduce((sum, row) => sum + num(row.amount), 0);
+  const issuedTotal = filteredPurchaseOrderRows("issued").reduce((sum, row) => sum + num(row.amount), 0);
+  els.purchaseOrderCount.textContent = String(projectRows.length);
   els.purchaseOrderOpenTotal.textContent = money.format(openTotal);
   els.purchaseOrderIssuedTotal.textContent = money.format(issuedTotal);
-  els.purchaseOrdersBody.innerHTML = state.purchaseOrders.length
-    ? state.purchaseOrders
+  if (els.purchaseOrderOverviewLabel) els.purchaseOrderOverviewLabel.textContent = purchaseOrderOverviewLabel();
+  document.querySelectorAll("[data-purchase-order-filter]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.purchaseOrderFilter === state.purchaseOrderFilter);
+  });
+  els.purchaseOrdersBody.innerHTML = visibleOrders.length
+    ? visibleOrders
         .map(
           (item) => `
-            <tr class="order-directory-row ${state.selectedPurchaseOrderId === item.id ? "selected" : ""}" data-select-purchase-order="${item.id}">
+            <tr class="order-directory-row ${state.selectedPurchaseOrderId === item.id && item.projectId === (state.crm.activeRecordId || "current") ? "selected" : ""}" data-select-purchase-order="${item.id}" data-purchase-order-project="${escapeAttr(item.projectId)}">
+              <td>
+                <div class="order-project-cell">
+                  <strong>${escapeAttr(item.projectName || "-")}</strong>
+                  <small>${escapeAttr(item.customerName || "")}</small>
+                </div>
+              </td>
               <td>${escapeAttr(item.number)}</td>
               <td>${escapeAttr(item.vendor || "-")}</td>
               <td>${escapeAttr(item.trade || "-")}</td>
@@ -4261,17 +4682,120 @@ function renderPurchaseOrders() {
               <td>${escapeAttr(item.neededDate || "-")}</td>
               <td>${escapeAttr(item.status || "Draft")}</td>
               <td>${escapeAttr(item.notes || "-")}</td>
+              <td><button class="secondary mini-button" type="button" data-print-purchase-order="${escapeAttr(item.id)}" data-purchase-order-project="${escapeAttr(item.projectId)}">Print</button></td>
             </tr>
           `,
         )
         .join("")
-    : `<tr><td colspan="7">No purchase orders yet.</td></tr>`;
+    : `<tr><td colspan="9">No purchase orders found for ${escapeAttr(purchaseOrderProjectFilterLabel())}.</td></tr>`;
   els.addPurchaseOrderBtn.textContent = state.selectedPurchaseOrderId ? "Update purchase order" : "Add purchase order";
+  if (els.printPurchaseOrderBtn) els.printPurchaseOrderBtn.disabled = !state.selectedPurchaseOrderId;
+}
+
+function purchaseOrderProjectRows() {
+  const currentId = state.crm.activeRecordId || "current";
+  const projects = [
+    {
+      id: currentId,
+      projectName: els.projectName?.value || "Current project",
+      customerName: els.customerName?.value || "New Customer",
+      purchaseOrders: state.purchaseOrders,
+    },
+    ...state.crm.records
+      .filter((record) => record.id !== currentId)
+      .map((record) => ({
+        id: record.id,
+        projectName: record.projectName || "Untitled project",
+        customerName: record.customerName || "No customer",
+        purchaseOrders: normalizePurchaseOrders(record.purchaseOrders),
+      })),
+  ];
+  return projects.flatMap((project) =>
+    normalizePurchaseOrders(project.purchaseOrders).map((order) => ({
+      ...order,
+      projectId: project.id,
+      projectName: project.projectName,
+      customerName: project.customerName,
+    })),
+  );
+}
+
+function purchaseOrderProjectOptionsHtml(selected = state.purchaseOrderProjectFilter) {
+  const currentId = state.crm.activeRecordId || "current";
+  const projects = [
+    { id: "current", label: `${els.projectName?.value || "Current project"} - ${els.customerName?.value || "New Customer"}` },
+    ...state.crm.records
+      .filter((record) => record.id !== currentId)
+      .map((record) => ({ id: record.id, label: `${record.projectName || "Untitled project"} - ${record.customerName || "No customer"}` })),
+  ];
+  return [
+    `<option value="all" ${selected === "all" ? "selected" : ""}>All projects</option>`,
+    ...projects.map((project) => `<option value="${escapeAttr(project.id)}" ${selected === project.id ? "selected" : ""}>${escapeAttr(project.label)}</option>`),
+  ].join("");
+}
+
+function syncPurchaseOrderProjectFilter() {
+  const currentId = state.crm.activeRecordId || "current";
+  const validProjectIds = new Set(["all", "current", currentId, ...state.crm.records.map((record) => record.id)]);
+  if (!validProjectIds.has(state.purchaseOrderProjectFilter)) state.purchaseOrderProjectFilter = "current";
+  if (!els.purchaseOrderProjectFilter) return;
+  els.purchaseOrderProjectFilter.innerHTML = purchaseOrderProjectOptionsHtml(state.purchaseOrderProjectFilter);
+  els.purchaseOrderProjectFilter.value = state.purchaseOrderProjectFilter;
+}
+
+function purchaseOrderProjectFilterLabel() {
+  const currentId = state.crm.activeRecordId || "current";
+  const projectFilter = state.purchaseOrderProjectFilter || "current";
+  if (projectFilter === "all") return "all projects";
+  if (projectFilter === "current" || projectFilter === currentId) return els.projectName?.value || "current project";
+  const record = state.crm.records.find((item) => item.id === projectFilter);
+  return record?.projectName || "the selected project";
+}
+
+function switchPurchaseOrderProjectFilter(projectId) {
+  state.purchaseOrderProjectFilter = projectId || "current";
+  state.selectedPurchaseOrderId = "";
+  clearPurchaseOrderForm();
+  const currentId = state.crm.activeRecordId || "current";
+  if (projectId && projectId !== "all" && projectId !== "current" && projectId !== currentId) {
+    saveActiveCrmRecordEdits();
+    const record = state.crm.records.find((item) => item.id === projectId);
+    if (!record) {
+      renderPurchaseOrders();
+      return;
+    }
+    applyCrmRecord(record);
+    state.purchaseOrderProjectFilter = "current";
+    setView("purchaseOrders");
+    return;
+  }
+  renderPurchaseOrders();
+}
+
+function filteredPurchaseOrderRows(filter = state.purchaseOrderFilter) {
+  const currentId = state.crm.activeRecordId || "current";
+  const projectFilter = state.purchaseOrderProjectFilter || "current";
+  return purchaseOrderProjectRows()
+    .filter((item) => projectFilter === "all" || (projectFilter === "current" ? item.projectId === currentId : item.projectId === projectFilter))
+    .filter((item) => {
+      if (filter === "open") return !["Received", "Closed"].includes(item.status);
+      if (filter === "issued") return ["Issued", "Received", "Closed"].includes(item.status);
+      return true;
+    })
+    .sort((a, b) => String(a.projectName).localeCompare(String(b.projectName)) || String(a.number).localeCompare(String(b.number)));
+}
+
+function purchaseOrderOverviewLabel() {
+  const scope = purchaseOrderProjectFilterLabel();
+  if (state.purchaseOrderFilter === "open") return `Showing open purchase orders for ${scope}.`;
+  if (state.purchaseOrderFilter === "issued") return `Showing issued, received, and closed purchase orders for ${scope}.`;
+  return `Showing all purchase orders for ${scope}.`;
 }
 
 function renderChangeOrders() {
   if (!els.changeOrdersBody) return;
   state.changeOrders = normalizeChangeOrders(state.changeOrders);
+  syncVendorCompanyOptions();
   if (state.selectedChangeOrderId && !state.changeOrders.some((order) => order.id === state.selectedChangeOrderId)) state.selectedChangeOrderId = "";
   if (els.changeOrderDate && !els.changeOrderDate.value) els.changeOrderDate.value = todayIso();
   const pendingTotal = state.changeOrders
@@ -4304,6 +4828,7 @@ function renderChangeOrders() {
 }
 
 function addPurchaseOrder() {
+  applyPurchaseOrderVendorTrade();
   const values = {
     vendor: els.purchaseOrderVendor.value.trim(),
     trade: els.purchaseOrderTrade.value || "Project Materials",
@@ -4325,6 +4850,7 @@ function addPurchaseOrder() {
   }
   clearPurchaseOrderForm();
   renderPurchaseOrders();
+  renderSchedule();
   saveActiveCrmRecordEdits();
 }
 
@@ -4356,6 +4882,27 @@ function addChangeOrder() {
 function selectPurchaseOrder(orderId) {
   const order = state.purchaseOrders.find((item) => item.id === orderId);
   if (!order) return;
+  populatePurchaseOrderForm(order);
+  renderPurchaseOrders();
+}
+
+function selectPurchaseOrderFromProject(orderId, projectId = state.crm.activeRecordId || "current") {
+  const currentId = state.crm.activeRecordId || "current";
+  if (projectId && projectId !== "current" && projectId !== currentId) {
+    saveActiveCrmRecordEdits();
+    const record = state.crm.records.find((item) => item.id === projectId);
+    if (!record) return;
+    state.purchaseOrderProjectFilter = "current";
+    applyCrmRecord(record);
+    setView("purchaseOrders");
+  }
+  const order = state.purchaseOrders.find((item) => item.id === orderId);
+  if (!order) return;
+  populatePurchaseOrderForm(order);
+  renderPurchaseOrders();
+}
+
+function populatePurchaseOrderForm(order) {
   state.selectedPurchaseOrderId = order.id;
   els.purchaseOrderVendor.value = order.vendor;
   els.purchaseOrderTrade.innerHTML = orderTradeOptionsHtml(order.trade);
@@ -4363,7 +4910,6 @@ function selectPurchaseOrder(orderId) {
   els.purchaseOrderNeededDate.value = order.neededDate;
   els.purchaseOrderStatus.value = order.status;
   els.purchaseOrderNotes.value = order.notes;
-  renderPurchaseOrders();
 }
 
 function clearPurchaseOrderForm() {
@@ -4374,6 +4920,48 @@ function clearPurchaseOrderForm() {
   els.purchaseOrderNeededDate.value = "";
   els.purchaseOrderStatus.value = "Draft";
   els.purchaseOrderNotes.value = "";
+}
+
+function purchaseOrderPrintHtml(order) {
+  const generatedDate = new Date().toLocaleDateString("en-CA");
+  const projectName = order.projectName || els.projectName?.value || "Current project";
+  const customerName = order.customerName || els.customerName?.value || "New Customer";
+  return `
+    <div class="purchase-order-print-page">
+      <h1>Purchase Order ${escapeAttr(order.number || "")}</h1>
+      <div class="purchase-order-print-meta">Generated ${escapeAttr(generatedDate)}</div>
+      <div class="purchase-order-print-grid">
+        <div><span>Project</span><strong>${escapeAttr(projectName)}</strong></div>
+        <div><span>Customer</span><strong>${escapeAttr(customerName)}</strong></div>
+        <div><span>Vendor / supplier</span><strong>${escapeAttr(order.vendor || "-")}</strong></div>
+        <div><span>Trade / category</span><strong>${escapeAttr(order.trade || "-")}</strong></div>
+        <div><span>Amount</span><strong>${money.format(num(order.amount))}</strong></div>
+        <div><span>Needed by</span><strong>${escapeAttr(order.neededDate || "-")}</strong></div>
+        <div><span>Status</span><strong>${escapeAttr(order.status || "Draft")}</strong></div>
+        <div><span>PO number</span><strong>${escapeAttr(order.number || "-")}</strong></div>
+      </div>
+      <h2>Notes / Scope</h2>
+      <div class="purchase-order-print-notes">${escapeAttr(order.notes || "")}</div>
+    </div>
+  `;
+}
+
+function clearPurchaseOrderPrintMode() {
+  document.body.classList.remove("purchase-order-printing");
+  if (els.purchaseOrderPrintArea) els.purchaseOrderPrintArea.innerHTML = "";
+}
+
+function printPurchaseOrder(orderId = state.selectedPurchaseOrderId, projectId = state.crm.activeRecordId || "current") {
+  const currentId = state.crm.activeRecordId || "current";
+  const order =
+    projectId && projectId !== "current" && projectId !== currentId
+      ? purchaseOrderProjectRows().find((item) => item.id === orderId && item.projectId === projectId)
+      : state.purchaseOrders.find((item) => item.id === orderId);
+  if (!order || !els.purchaseOrderPrintArea) return;
+  els.purchaseOrderPrintArea.innerHTML = purchaseOrderPrintHtml(order);
+  document.body.classList.add("purchase-order-printing");
+  window.print();
+  window.setTimeout(clearPurchaseOrderPrintMode, 500);
 }
 
 function selectChangeOrder(orderId) {
@@ -4397,6 +4985,7 @@ function clearChangeOrderForm() {
   els.changeOrderDate.value = todayIso();
   els.changeOrderStatus.value = "Draft";
   els.changeOrderDescription.value = "";
+  renderChangeOrders();
 }
 
 function handlePurchaseOrderEdit(event) {
@@ -4765,29 +5354,6 @@ function handleRatePick(event) {
   return true;
 }
 
-function exportSummary() {
-  const totals = grandTotals();
-  const rows = [
-    ["Project", els.projectName.value],
-    ["Customer", els.customerName.value],
-    ["Type", els.projectType.value],
-    ["Project level", els.projectLevel.value],
-    ["Cost", money.format(totals.cost)],
-    ["Retail before tax", money.format(totals.retail)],
-    ["PST", money.format(totals.pst)],
-    ["GST", money.format(totals.gst)],
-    ["Total", money.format(totals.total)],
-    ...createBillingStages(state.crm.billingStages).map((stage) => [
-      `${stage.group} - ${stage.label}`,
-      [stage.status, stage.amount ? money.format(num(stage.amount)) : "", stage.completedDate, stage.notes].filter(Boolean).join(" | ") || "Not started",
-    ]),
-  ];
-  const text = rows.map((row) => row.join(",")).join("\n");
-  navigator.clipboard?.writeText(text);
-  els.exportBtn.textContent = "Copied summary";
-  window.setTimeout(() => (els.exportBtn.textContent = "Export summary"), 1400);
-}
-
 function storageAvailable() {
   try {
     window.localStorage.setItem("zaks-crm-test", "1");
@@ -4828,6 +5394,7 @@ function normalizeSchedule(schedule) {
     department: item.department || "Production",
     trade: item.trade || item.department || "Production",
     subtrade: item.subtrade || "",
+    purchaseOrderId: item.purchaseOrderId || "",
     targetDate: item.targetDate || normalized.startDate,
     endDate: item.endDate || item.targetDate || normalized.startDate,
     status: item.status || "Not started",
@@ -4922,6 +5489,8 @@ function normalizeWarranty(warranty = {}) {
   return {
     complete: Boolean(warranty.complete),
     startDate: warranty.startDate || "",
+    newHomeWarrantyStartDate: warranty.newHomeWarrantyStartDate || "",
+    newHomeWarrantyPaperworkSent: Boolean(warranty.newHomeWarrantyPaperworkSent),
     notes: warranty.notes || "",
     deficiencies: deficiencies.map((item, index) => ({
       id: item.id || `deficiency-${Date.now()}-${index}`,
@@ -5056,6 +5625,7 @@ function applyCrmRecord(record) {
     descriptions: record.output?.descriptions || {},
     manual: record.output?.manual || {},
     descriptionsManual: record.output?.descriptionsManual || {},
+    scopeItems: normalizeOutputScopeItems(record.output?.scopeItems),
   };
   state.contract = {
     date: record.contract?.date || "",
@@ -5147,6 +5717,7 @@ function newCrmLead() {
     descriptions: {},
     manual: {},
     descriptionsManual: {},
+    scopeItems: [],
   };
   state.contract = {
     date: todayIso(),
@@ -5240,10 +5811,13 @@ function renderCrm() {
   els.crmTasks.innerHTML = state.crm.tasks
     .map(
       (task, index) => `
-        <label class="task-row">
-          <input data-task-index="${index}" type="checkbox" ${task.done ? "checked" : ""} />
-          <span>${escapeAttr(task.text)}</span>
-        </label>
+        <article class="task-row">
+          <label>
+            <input data-task-index="${index}" type="checkbox" ${task.done ? "checked" : ""} />
+            <span>${escapeAttr(task.text)}</span>
+          </label>
+          <button class="secondary mini-button" type="button" data-delete-crm-task="${index}">Delete</button>
+        </article>
       `,
     )
     .join("");
@@ -5318,6 +5892,7 @@ function renderBillingStages() {
       `;
     })
     .join("");
+  renderBillingReport();
 }
 
 function handleBillingStageEdit(event) {
@@ -5349,11 +5924,164 @@ function handleBillingStageEdit(event) {
       .reduce((sum, item) => sum + num(item.amount), 0);
     if (els.billingStageAmountTotal) els.billingStageAmountTotal.textContent = money.format(amountTotal);
     if (els.billingStagePaidTotal) els.billingStagePaidTotal.textContent = money.format(paidTotal);
+    renderBillingReport();
     saveActiveCrmRecordEdits();
     return;
   }
   renderBillingStages();
   saveActiveCrmRecordEdits();
+}
+
+function billingProjectRecords() {
+  const current = currentCrmRecord();
+  const saved = state.crm.records.filter((record) => record.id !== current.id);
+  return [current, ...saved].filter((record) => record.projectName || record.customerName);
+}
+
+function billingReportStatus(stage) {
+  if (stage.status === "Paid") return "paid";
+  if (stage.status === "Invoiced") return "outstanding";
+  if (stage.status === "Complete" || stage.completed) return "ready";
+  return "upcoming";
+}
+
+function billingReportRows() {
+  return billingProjectRecords().flatMap((record) =>
+    createBillingStages(record.billingStages).map((stage) => {
+      const reportStatus = billingReportStatus(stage);
+      const amount = num(stage.amount);
+      return {
+        key: `${record.id}-${stage.id}`,
+        recordId: record.id,
+        projectName: record.projectName || "Untitled project",
+        customerName: record.customerName || "New Customer",
+        stageLabel: stage.label,
+        group: stage.group,
+        status: stage.status,
+        reportStatus,
+        reportStatusLabel: billingReportStatuses[reportStatus],
+        completedDate: stage.completedDate || "",
+        amount,
+        owing: reportStatus === "paid" ? 0 : amount,
+        notes: stage.notes || "",
+      };
+    }),
+  );
+}
+
+function filteredBillingReportRows() {
+  const filter = els.billingReportFilter?.value || "all";
+  return billingReportRows().filter((row) => filter === "all" || row.reportStatus === filter);
+}
+
+function renderBillingReport() {
+  if (!els.billingReportBody) return;
+  const rows = billingReportRows();
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc[row.reportStatus] += row.amount;
+      return acc;
+    },
+    { ready: 0, outstanding: 0, paid: 0, upcoming: 0 },
+  );
+  els.billingReportReadyTotal.textContent = money.format(totals.ready);
+  els.billingReportOutstandingTotal.textContent = money.format(totals.outstanding);
+  els.billingReportPaidTotal.textContent = money.format(totals.paid);
+  els.billingReportUpcomingTotal.textContent = money.format(totals.upcoming);
+
+  const visibleRows = filteredBillingReportRows();
+  els.billingReportBody.innerHTML = visibleRows.length
+    ? visibleRows
+        .map(
+          (row) => `
+            <tr data-billing-report-row="${escapeAttr(row.key)}">
+              <td>${escapeAttr(row.projectName)}</td>
+              <td>${escapeAttr(row.customerName)}</td>
+              <td>${escapeAttr(row.stageLabel)}</td>
+              <td><span class="billing-status-pill ${escapeAttr(row.reportStatus)}">${escapeAttr(row.reportStatusLabel)}</span></td>
+              <td>${escapeAttr(row.completedDate || "-")}</td>
+              <td>${money.format(row.amount)}</td>
+              <td>${money.format(row.owing)}</td>
+              <td>${escapeAttr(row.notes || "")}</td>
+              <td><button class="secondary mini-button" type="button" data-print-billing-invoice="${escapeAttr(row.key)}">Print</button></td>
+            </tr>
+          `,
+        )
+        .join("")
+    : `<tr><td colspan="9" class="muted-cell">No billing stages match this view.</td></tr>`;
+}
+
+function billingReportPrintHtml(rows, title) {
+  const generatedDate = new Date().toLocaleDateString("en-CA");
+  const totalAmount = rows.reduce((sum, row) => sum + row.amount, 0);
+  const totalOwing = rows.reduce((sum, row) => sum + row.owing, 0);
+  return `
+    <div class="billing-print-page">
+      <h1>${escapeAttr(title)}</h1>
+      <div class="billing-print-meta">Generated ${escapeAttr(generatedDate)}</div>
+      <table class="billing-print-table">
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Customer</th>
+            <th>Stage</th>
+            <th>Status</th>
+            <th>Completed</th>
+            <th>Amount</th>
+            <th>Owing</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows
+            .map(
+              (row) => `
+                <tr>
+                  <td>${escapeAttr(row.projectName)}</td>
+                  <td>${escapeAttr(row.customerName)}</td>
+                  <td>${escapeAttr(row.stageLabel)}</td>
+                  <td>${escapeAttr(row.reportStatusLabel)}</td>
+                  <td>${escapeAttr(row.completedDate || "-")}</td>
+                  <td>${money.format(row.amount)}</td>
+                  <td>${money.format(row.owing)}</td>
+                  <td>${escapeAttr(row.notes || "")}</td>
+                </tr>
+              `,
+            )
+            .join("")}
+        </tbody>
+      </table>
+      <div class="billing-print-totals">
+        <span>Total amount: ${money.format(totalAmount)}</span>
+        <span>Total owing: ${money.format(totalOwing)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function clearBillingPrintMode() {
+  document.body.classList.remove("billing-printing");
+  if (els.billingPrintArea) els.billingPrintArea.innerHTML = "";
+}
+
+function printBillingRows(rows, title) {
+  if (!rows.length || !els.billingPrintArea) return;
+  els.billingPrintArea.innerHTML = billingReportPrintHtml(rows, title);
+  document.body.classList.add("billing-printing");
+  window.print();
+  window.setTimeout(clearBillingPrintMode, 500);
+}
+
+function printBillingReport() {
+  const filter = els.billingReportFilter?.value || "all";
+  const title = filter === "all" ? "All Project Billing Report" : `${billingReportStatuses[filter]} Billing Report`;
+  printBillingRows(filteredBillingReportRows(), title);
+}
+
+function printBillingInvoice(rowKey) {
+  const row = billingReportRows().find((item) => item.key === rowKey);
+  if (!row) return;
+  printBillingRows([row], `Billing Invoice - ${row.projectName}`);
 }
 
 function updateCrmRecordStatus(recordId, status) {
@@ -5401,6 +6129,14 @@ function addCrmTask() {
   const label = window.prompt("Task name");
   if (!label) return;
   state.crm.tasks.push({ id: `task-${Date.now()}`, text: label, done: false, owner: "Sales", dueDate: "", priority: "Normal", status: "Open", notes: "" });
+  renderCrm();
+  renderProjectTasks();
+  saveActiveCrmRecordEdits();
+}
+
+function deleteCrmTask(index) {
+  if (index < 0 || index >= state.crm.tasks.length) return;
+  state.crm.tasks.splice(index, 1);
   renderCrm();
   renderProjectTasks();
   saveActiveCrmRecordEdits();
@@ -5493,13 +6229,32 @@ function renderWarranty() {
       `,
     )
     .join("");
+  if (els.warrantyAdminProject) els.warrantyAdminProject.textContent = selectedRow?.projectName || "-";
+  if (els.warrantyAdminCustomer) els.warrantyAdminCustomer.textContent = selectedRow?.customerName || "-";
+  if (els.warrantyAdminStarted) els.warrantyAdminStarted.textContent = selectedRow?.started ? prettyDate(selectedRow.started.slice(0, 10)) : "-";
+  if (els.warrantyNewHomeStartDate) els.warrantyNewHomeStartDate.value = selectedRow?.warranty.newHomeWarrantyStartDate || "";
+  if (els.warrantyPaperworkSent) els.warrantyPaperworkSent.checked = Boolean(selectedRow?.warranty.newHomeWarrantyPaperworkSent);
   els.warrantyDeficiencyProject.innerHTML = rows
     .map((row) => `<option value="${escapeAttr(row.id)}" ${row.id === state.warranty.selectedProjectId ? "selected" : ""}>${escapeAttr(row.projectName)} - ${escapeAttr(row.customerName)}</option>`)
     .join("");
   els.warrantyPrintHeader.innerHTML = selectedRow
-    ? `<strong>${escapeAttr(selectedRow.projectName)}</strong><span>${escapeAttr(selectedRow.customerName)}${selectedRow.warranty.startDate ? ` - Warranty Start ${escapeAttr(prettyDate(selectedRow.warranty.startDate))}` : ""}</span>`
+    ? `<strong>${escapeAttr(selectedRow.projectName)}</strong><span>${escapeAttr(selectedRow.customerName)}${selectedRow.warranty.startDate ? ` - Warranty Start ${escapeAttr(prettyDate(selectedRow.warranty.startDate))}` : ""}${selectedRow.warranty.newHomeWarrantyStartDate ? ` - New Home Warranty ${escapeAttr(prettyDate(selectedRow.warranty.newHomeWarrantyStartDate))}` : ""}</span>`
     : "";
   renderWarrantyDeficiencies();
+}
+
+function handleWarrantyAdminEdit(event) {
+  const target = warrantyTarget();
+  if (!target) return;
+  if (event.target === els.warrantyNewHomeStartDate) {
+    target.warranty.newHomeWarrantyStartDate = event.target.value;
+  } else if (event.target === els.warrantyPaperworkSent) {
+    target.warranty.newHomeWarrantyPaperworkSent = event.target.checked;
+  } else {
+    return;
+  }
+  target.save();
+  if (event.type === "change") renderWarranty();
 }
 
 function renderWarrantyDeficiencies() {
@@ -5879,11 +6634,6 @@ function selectProjectTask(projectId, taskId) {
   renderProjectTasks();
 }
 
-function resetPrototype() {
-  hydrateBlankEstimate();
-  render();
-}
-
 async function init() {
   [
     "loginScreen",
@@ -5893,6 +6643,13 @@ async function init() {
     "loginError",
     "activeUserName",
     "activeUserRole",
+    "accountMenuBtn",
+    "accountPanel",
+    "closeAccountPanelBtn",
+    "accountName",
+    "accountEmail",
+    "accountPhone",
+    "accountRole",
     "logoutBtn",
     "estimateProjectSelect",
     "projectName",
@@ -5933,6 +6690,14 @@ async function init() {
     "outputIntro",
     "outputMovingNotes",
     "outputExclusions",
+    "outputScopeSection",
+    "outputScopeDescription",
+    "outputScopeSort",
+    "outputScopeIndent",
+    "outputScopeProposal",
+    "outputScopeContract",
+    "addOutputScopeItemBtn",
+    "outputScopeItemsList",
     "printOutputBtn",
     "outputLineEditor",
     "proposalPreview",
@@ -5997,6 +6762,11 @@ async function init() {
     "warrantyCompleteCount",
     "warrantyOpenDeficiencyCount",
     "warrantyProjectsBody",
+    "warrantyAdminProject",
+    "warrantyAdminCustomer",
+    "warrantyAdminStarted",
+    "warrantyNewHomeStartDate",
+    "warrantyPaperworkSent",
     "warrantyDeficiencyProject",
     "warrantyDeficiencyText",
     "warrantyDeficiencyAssignedTo",
@@ -6038,10 +6808,10 @@ async function init() {
     "scheduleTodayBtn",
     "scheduleEditName",
     "scheduleEditProjectName",
-    "scheduleProjectOptions",
     "scheduleEditDepartment",
     "scheduleEditTrade",
     "scheduleEditSubtrade",
+    "scheduleEditPurchaseOrder",
     "scheduleEditDate",
     "scheduleEditEndDate",
     "scheduleEditStatus",
@@ -6065,6 +6835,14 @@ async function init() {
     "billingStageCount",
     "billingStageAmountTotal",
     "billingStagePaidTotal",
+    "billingReportReadyTotal",
+    "billingReportOutstandingTotal",
+    "billingReportPaidTotal",
+    "billingReportUpcomingTotal",
+    "billingReportFilter",
+    "billingReportBody",
+    "billingPrintArea",
+    "printBillingReportBtn",
     "jobFileCount",
     "jobPhotoCount",
     "jobFileTotalSize",
@@ -6094,9 +6872,11 @@ async function init() {
     "vendorSearch",
     "vendorTradeFilter",
     "vendorsBody",
+    "vendorCompanyOptions",
     "purchaseOrderCount",
     "purchaseOrderOpenTotal",
     "purchaseOrderIssuedTotal",
+    "purchaseOrderProjectFilter",
     "purchaseOrderVendor",
     "purchaseOrderTrade",
     "purchaseOrderAmount",
@@ -6104,7 +6884,10 @@ async function init() {
     "purchaseOrderStatus",
     "purchaseOrderNotes",
     "addPurchaseOrderBtn",
+    "printPurchaseOrderBtn",
+    "purchaseOrderOverviewLabel",
     "purchaseOrdersBody",
+    "purchaseOrderPrintArea",
     "changeOrderCount",
     "changeOrderPendingTotal",
     "changeOrderApprovedTotal",
@@ -6131,7 +6914,6 @@ async function init() {
     "managementBreakdownBody",
     "closeManagementBreakdownBtn",
     "viewTitle",
-    "exportBtn",
   ].forEach((id) => (els[id] = byId(id)));
 
   state.library = await fetch("./estimate_library_extract.json").then((response) => response.json());
@@ -6157,13 +6939,23 @@ async function init() {
   document.querySelectorAll("[data-nav-group-toggle]").forEach((button) => {
     button.addEventListener("click", () => {
       const group = document.querySelector(`[data-nav-group="${button.dataset.navGroupToggle}"]`);
-      group?.classList.toggle("collapsed");
-      syncNavGroups();
+      if (!group || !group.classList.contains("collapsed")) {
+        group?.classList.add("collapsed");
+        button.setAttribute("aria-expanded", "false");
+        return;
+      }
+      setOpenNavGroup(button.dataset.navGroupToggle);
     });
   });
   els.loginForm.addEventListener("submit", handleLogin);
   els.logoutBtn.addEventListener("click", logout);
+  els.accountMenuBtn.addEventListener("click", () => toggleAccountPanel());
+  els.closeAccountPanelBtn.addEventListener("click", () => toggleAccountPanel(false));
   document.addEventListener("input", (event) => {
+    if ([els.accountName, els.accountEmail, els.accountPhone].includes(event.target)) {
+      handleAccountEdit();
+      return;
+    }
     if (event.target.closest("[data-rate-pick]")) {
       handleRatePick(event);
       return;
@@ -6174,6 +6966,14 @@ async function init() {
     }
     if (event.target.closest("[data-purchase-order]")) {
       handlePurchaseOrderEdit(event);
+      return;
+    }
+    if (event.target === els.purchaseOrderVendor) {
+      applyPurchaseOrderVendorTrade();
+      return;
+    }
+    if (event.target === els.purchaseOrderProjectFilter) {
+      switchPurchaseOrderProjectFilter(event.target.value);
       return;
     }
     if (event.target.closest("[data-change-order]")) {
@@ -6199,8 +6999,16 @@ async function init() {
       handleBillingStageEdit(event);
       return;
     }
+    if (event.target === els.billingReportFilter) {
+      renderBillingReport();
+      return;
+    }
     if (event.target.closest("[data-select-warranty-project]")) {
       handleWarrantyProjectEdit(event);
+      return;
+    }
+    if (event.target === els.warrantyNewHomeStartDate || event.target === els.warrantyPaperworkSent) {
+      handleWarrantyAdminEdit(event);
       return;
     }
     if (event.target.closest("[data-warranty-deficiency]")) {
@@ -6229,6 +7037,7 @@ async function init() {
         els.scheduleEditDepartment,
         els.scheduleEditTrade,
         els.scheduleEditSubtrade,
+        els.scheduleEditPurchaseOrder,
         els.scheduleEditDate,
         els.scheduleEditEndDate,
         els.scheduleEditStatus,
@@ -6255,6 +7064,10 @@ async function init() {
     }
   });
   document.addEventListener("change", (event) => {
+    if ([els.accountName, els.accountEmail, els.accountPhone].includes(event.target)) {
+      handleAccountEdit();
+      return;
+    }
     if (event.target.closest("[data-rate-pick]")) {
       handleRatePick(event);
       return;
@@ -6265,6 +7078,14 @@ async function init() {
     }
     if (event.target.closest("[data-purchase-order]")) {
       handlePurchaseOrderEdit(event);
+      return;
+    }
+    if (event.target === els.purchaseOrderVendor) {
+      applyPurchaseOrderVendorTrade();
+      return;
+    }
+    if (event.target === els.purchaseOrderProjectFilter) {
+      switchPurchaseOrderProjectFilter(event.target.value);
       return;
     }
     if (event.target.closest("[data-change-order]")) {
@@ -6290,8 +7111,16 @@ async function init() {
       handleBillingStageEdit(event);
       return;
     }
+    if (event.target === els.billingReportFilter) {
+      renderBillingReport();
+      return;
+    }
     if (event.target.closest("[data-select-warranty-project]")) {
       handleWarrantyProjectEdit(event);
+      return;
+    }
+    if (event.target === els.warrantyNewHomeStartDate || event.target === els.warrantyPaperworkSent) {
+      handleWarrantyAdminEdit(event);
       return;
     }
     if (event.target.closest("[data-warranty-deficiency-photo]")) {
@@ -6324,6 +7153,7 @@ async function init() {
         els.scheduleEditDepartment,
         els.scheduleEditTrade,
         els.scheduleEditSubtrade,
+        els.scheduleEditPurchaseOrder,
         els.scheduleEditDate,
         els.scheduleEditEndDate,
         els.scheduleEditStatus,
@@ -6336,6 +7166,10 @@ async function init() {
     if ([els.sectionFilter, els.projectType].includes(event.target)) render();
   });
   document.addEventListener("click", (event) => {
+    if (state.auth.accountPanelOpen && !event.target.closest(".account-menu")) {
+      toggleAccountPanel(false);
+      return;
+    }
     const resizeButton = event.target.closest("[data-schedule-resize]");
     if (resizeButton) {
       event.preventDefault();
@@ -6370,6 +7204,11 @@ async function init() {
       markEstimateVersionSent(markSentButton.dataset.markEstimateSent);
       return;
     }
+    const loadVersionButton = event.target.closest("[data-load-estimate-version]");
+    if (loadVersionButton) {
+      loadEstimateVersion(loadVersionButton.dataset.loadEstimateVersion);
+      return;
+    }
     const renameVersionButton = event.target.closest("[data-rename-estimate-version]");
     if (renameVersionButton) {
       renameEstimateVersion(renameVersionButton.dataset.renameEstimateVersion);
@@ -6382,6 +7221,27 @@ async function init() {
     }
     if (event.target.closest("[data-close-estimate-version]")) {
       closeEstimateVersion();
+      return;
+    }
+    const deleteScopeItemButton = event.target.closest("[data-delete-output-scope-item]");
+    if (deleteScopeItemButton) {
+      deleteOutputScopeItem(deleteScopeItemButton.dataset.deleteOutputScopeItem);
+      return;
+    }
+    const printBillingInvoiceButton = event.target.closest("[data-print-billing-invoice]");
+    if (printBillingInvoiceButton) {
+      printBillingInvoice(printBillingInvoiceButton.dataset.printBillingInvoice);
+      return;
+    }
+    const purchaseOrderFilterButton = event.target.closest("[data-purchase-order-filter]");
+    if (purchaseOrderFilterButton) {
+      state.purchaseOrderFilter = purchaseOrderFilterButton.dataset.purchaseOrderFilter || "all";
+      renderPurchaseOrders();
+      return;
+    }
+    const printPurchaseOrderButton = event.target.closest("[data-print-purchase-order]");
+    if (printPurchaseOrderButton) {
+      printPurchaseOrder(printPurchaseOrderButton.dataset.printPurchaseOrder, printPurchaseOrderButton.dataset.purchaseOrderProject);
       return;
     }
     const deleteFileButton = event.target.closest("[data-delete-job-file]");
@@ -6402,7 +7262,7 @@ async function init() {
     }
     const selectPurchaseOrderRow = event.target.closest("[data-select-purchase-order]");
     if (selectPurchaseOrderRow) {
-      selectPurchaseOrder(selectPurchaseOrderRow.dataset.selectPurchaseOrder);
+      selectPurchaseOrderFromProject(selectPurchaseOrderRow.dataset.selectPurchaseOrder, selectPurchaseOrderRow.dataset.purchaseOrderProject);
       return;
     }
     const selectChangeOrderRow = event.target.closest("[data-select-change-order]");
@@ -6535,6 +7395,11 @@ async function init() {
       if (record) applyCrmRecord(record);
       return;
     }
+    const deleteCrmTaskButton = event.target.closest("[data-delete-crm-task]");
+    if (deleteCrmTaskButton) {
+      deleteCrmTask(num(deleteCrmTaskButton.dataset.deleteCrmTask));
+      return;
+    }
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && state.openJobFilePreviewId) closeJobFilePreview();
@@ -6608,9 +7473,7 @@ async function init() {
     if (handleScheduleDrop(event)) return;
     handleCrmDrop(event);
   });
-  byId("resetBtn").addEventListener("click", resetPrototype);
   els.distanceLookupBtn.addEventListener("click", lookupDistance);
-  els.exportBtn.addEventListener("click", exportSummary);
   els.saveEstimateVersionBtn.addEventListener("click", saveEstimateVersion);
   els.closeEstimateVersionBtn.addEventListener("click", closeEstimateVersion);
   els.printContractBtn.addEventListener("click", printApprovedContract);
@@ -6625,6 +7488,9 @@ async function init() {
     renderTaskBreakdown();
   });
   els.printOutputBtn.addEventListener("click", () => window.print());
+  els.addOutputScopeItemBtn.addEventListener("click", addOutputScopeItem);
+  els.printBillingReportBtn.addEventListener("click", printBillingReport);
+  els.printPurchaseOrderBtn.addEventListener("click", () => printPurchaseOrder());
   els.saveLeadBtn.addEventListener("click", saveCrmRecord);
   els.newLeadBtn.addEventListener("click", newCrmLead);
   els.startEstimateBtn.addEventListener("click", startEstimateForLead);
