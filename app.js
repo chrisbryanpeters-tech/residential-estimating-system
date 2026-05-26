@@ -5802,8 +5802,6 @@ function renderCrm() {
     card.innerHTML = `
       <strong>${escapeAttr(record.projectName || "Current project")}</strong>
       <span>${escapeAttr(record.customerName || "New Customer")}</span>
-      <small>${escapeAttr(record.projectType || "RTM")} ${record.projectLevel && record.projectLevel !== "N/A" ? `- ${escapeAttr(record.projectLevel)}` : ""}</small>
-      <b>${money.format(record.id === current.id ? totals.total : record.estimateTotal || 0)}</b>
     `;
     activeLane.appendChild(card);
   });
@@ -5834,6 +5832,23 @@ function renderCrm() {
         )
         .join("")
     : `<p class="empty-note">No notes yet.</p>`;
+  renderCrmMap();
+}
+
+function renderCrmMap() {
+  if (!els.crmProjectMap) return;
+  const address = String(els.crmProjectAddress?.value || "").trim();
+  const hasAddress = Boolean(address);
+  const mapUrl = hasAddress ? `https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed` : "";
+  const linkUrl = hasAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : "#";
+  els.crmProjectMap.toggleAttribute("hidden", !hasAddress);
+  els.crmMapEmpty?.toggleAttribute("hidden", hasAddress);
+  if (hasAddress && els.crmProjectMap.getAttribute("src") !== mapUrl) els.crmProjectMap.src = mapUrl;
+  if (!hasAddress) els.crmProjectMap.removeAttribute("src");
+  if (els.crmMapLink) {
+    els.crmMapLink.href = linkUrl;
+    els.crmMapLink.toggleAttribute("hidden", !hasAddress);
+  }
 }
 
 function renderBillingStages() {
@@ -6730,6 +6745,9 @@ async function init() {
     "crmSalesperson",
     "crmInterestedModels",
     "crmProjectAddress",
+    "crmMapLink",
+    "crmMapEmpty",
+    "crmProjectMap",
     "crmCustomerName",
     "crmProjectName",
     "crmProjectType",

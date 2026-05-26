@@ -414,6 +414,76 @@
         <section id="crmView" class="view active">
           <div class="crm-layout">
             <section class="crm-main">
+              <div class="board" id="crmBoard">
+                <div class="lane" data-crm-lane="New"><h3>New</h3><div class="lane-items"></div></div>
+                <div class="lane" data-crm-lane="Contacted"><h3>Contacted</h3><div class="lane-items"></div></div>
+                <div class="lane" data-crm-lane="Needs Estimate"><h3>Needs Estimate</h3><div class="lane-items"></div></div>
+                <div class="lane" data-crm-lane="Quote Sent"><h3>Quote Sent</h3><div class="lane-items"></div></div>
+                <div class="lane" data-crm-lane="Won"><h3>Won</h3><div class="lane-items"></div></div>
+                <div class="lane" data-crm-lane="Under Construction"><h3>Under Construction</h3><div class="lane-items"></div></div>
+              </div>
+
+              <section class="crm-card customer-snapshot-card">
+                <div class="snapshot-identity">
+                  <div>
+                    <span>Customer</span>
+                    <strong id="crmCustomerName">New Customer</strong>
+                  </div>
+                  <div>
+                    <span>Project</span>
+                    <strong id="crmProjectName">Sample RTM Estimate</strong>
+                  </div>
+                </div>
+                <div class="snapshot-metrics">
+                  <div>
+                    <span>Type</span>
+                    <strong id="crmProjectType">RTM</strong>
+                  </div>
+                  <div>
+                    <span>Level</span>
+                    <strong id="crmProjectLevel">Standard</strong>
+                  </div>
+                  <div class="snapshot-total">
+                    <span>Estimate total</span>
+                    <strong id="crmEstimateTotal">$0</strong>
+                  </div>
+                </div>
+              </section>
+
+              <div class="crm-toolbar">
+                <label>
+                  CRM record
+                  <select id="crmRecordSelect"></select>
+                </label>
+                <label>
+                  Lead status
+                  <select id="crmStatus">
+                    <option>New</option>
+                    <option>Contacted</option>
+                    <option selected>Needs Estimate</option>
+                    <option>Estimate In Progress</option>
+                    <option>Quote Sent</option>
+                    <option>Follow-up</option>
+                    <option>Won</option>
+                    <option>Under Construction</option>
+                    <option>Lost</option>
+                  </select>
+                </label>
+                <label>
+                  Assigned to
+                  <input id="crmOwner" value="Sales" />
+                </label>
+                <label>
+                  Next follow-up
+                  <input id="crmFollowupDate" type="date" />
+                </label>
+                <div class="crm-actions">
+                  <button id="newLeadBtn" class="secondary" type="button">New lead</button>
+                  <button id="saveLeadBtn" type="button">Save lead</button>
+                  <button id="startEstimateBtn" type="button">Start estimate</button>
+                </div>
+              </div>
+
               <section class="crm-card crm-contact-card">
                 <div class="crm-card-head">
                   <h3>Contact Details</h3>
@@ -471,80 +541,10 @@
                 </div>
               </section>
 
-              <div class="crm-toolbar">
-                <label>
-                  CRM record
-                  <select id="crmRecordSelect"></select>
-                </label>
-                <label>
-                  Lead status
-                  <select id="crmStatus">
-                    <option>New</option>
-                    <option>Contacted</option>
-                    <option selected>Needs Estimate</option>
-                    <option>Estimate In Progress</option>
-                    <option>Quote Sent</option>
-                    <option>Follow-up</option>
-                    <option>Won</option>
-                    <option>Under Construction</option>
-                    <option>Lost</option>
-                  </select>
-                </label>
-                <label>
-                  Assigned to
-                  <input id="crmOwner" value="Sales" />
-                </label>
-                <label>
-                  Next follow-up
-                  <input id="crmFollowupDate" type="date" />
-                </label>
-                <div class="crm-actions">
-                  <button id="newLeadBtn" class="secondary" type="button">New lead</button>
-                  <button id="saveLeadBtn" type="button">Save lead</button>
-                  <button id="startEstimateBtn" type="button">Start estimate</button>
-                </div>
-              </div>
-
-              <div class="board" id="crmBoard">
-                <div class="lane" data-crm-lane="New"><h3>New</h3><div class="lane-items"></div></div>
-                <div class="lane" data-crm-lane="Contacted"><h3>Contacted</h3><div class="lane-items"></div></div>
-                <div class="lane" data-crm-lane="Needs Estimate"><h3>Needs Estimate</h3><div class="lane-items"></div></div>
-                <div class="lane" data-crm-lane="Quote Sent"><h3>Quote Sent</h3><div class="lane-items"></div></div>
-                <div class="lane" data-crm-lane="Won"><h3>Won</h3><div class="lane-items"></div></div>
-                <div class="lane" data-crm-lane="Under Construction"><h3>Under Construction</h3><div class="lane-items"></div></div>
-              </div>
-
-              <section class="crm-card customer-snapshot-card">
-                <div class="snapshot-identity">
-                  <div>
-                    <span>Customer</span>
-                    <strong id="crmCustomerName">New Customer</strong>
-                  </div>
-                  <div>
-                    <span>Project</span>
-                    <strong id="crmProjectName">Sample RTM Estimate</strong>
-                  </div>
-                </div>
-                <div class="snapshot-metrics">
-                  <div>
-                    <span>Type</span>
-                    <strong id="crmProjectType">RTM</strong>
-                  </div>
-                  <div>
-                    <span>Level</span>
-                    <strong id="crmProjectLevel">Standard</strong>
-                  </div>
-                  <div class="snapshot-total">
-                    <span>Estimate total</span>
-                    <strong id="crmEstimateTotal">$0</strong>
-                  </div>
-                </div>
-              </section>
-
               <section class="crm-card">
                 <div class="crm-card-head">
                   <h3>To-Dos</h3>
-                  <button id="addTaskBtn" class="secondary" type="button">Add task</button>
+                  <button id="addTaskBtn" class="secondary mini-button crm-add-task-btn" type="button">Add task</button>
                 </div>
                 <div id="crmTasks" class="task-list"></div>
               </section>
@@ -554,6 +554,15 @@
                 <textarea id="crmNoteInput" rows="4" placeholder="Add a call note, customer preference, or next step"></textarea>
                 <button id="addNoteBtn" type="button">Add note</button>
                 <div id="crmNotes" class="note-list"></div>
+              </section>
+
+              <section class="crm-card crm-map-card">
+                <div class="crm-card-head">
+                  <h3>Project Map</h3>
+                  <a id="crmMapLink" class="secondary file-download-link" href="#" target="_blank" rel="noopener">Open map</a>
+                </div>
+                <div id="crmMapEmpty" class="crm-map-empty">Enter a project address to show the map.</div>
+                <iframe id="crmProjectMap" class="crm-project-map" title="Project location map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
               </section>
             </section>
           </div>

@@ -1882,6 +1882,12 @@ label {
   font-size: 13px;
 }
 
+.lane-items {
+  max-height: 310px;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
 .lane article,
 .timeline article,
 .review-list article {
@@ -1890,6 +1896,11 @@ label {
   border-radius: 7px;
   padding: 10px;
   margin-bottom: 10px;
+}
+
+.lane article {
+  padding: 7px 8px;
+  margin-bottom: 6px;
 }
 
 .crm-layout {
@@ -1946,7 +1957,17 @@ label {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.crm-card-head h3 {
+  margin-bottom: 0;
+}
+
+.crm-add-task-btn {
+  min-height: 30px;
+  padding-inline: 10px;
 }
 
 .crm-contact-card {
@@ -1955,17 +1976,54 @@ label {
 
 .crm-contact-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  grid-template-columns: repeat(3, minmax(170px, 1fr));
   gap: 10px;
+  align-items: start;
 }
 
-.crm-contact-grid label:nth-last-child(-n + 2) {
-  grid-column: span 2;
+.crm-contact-grid label {
+  min-width: 0;
+}
+
+.crm-contact-grid label:nth-child(7),
+.crm-contact-grid label:nth-child(8) {
+  grid-column: span 1;
+}
+
+.crm-map-card {
+  display: grid;
+  gap: 12px;
+}
+
+.crm-project-map {
+  width: 100%;
+  min-height: 340px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.crm-project-map[hidden],
+.crm-map-empty[hidden] {
+  display: none;
+}
+
+.crm-map-empty {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  border: 1px dashed #cfd7dc;
+  border-radius: 8px;
+  background: #fbfcfd;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .lead-card {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   cursor: pointer;
   transition:
     border-color 0.15s ease,
@@ -1990,9 +2048,16 @@ label {
   transform: translateY(-1px);
 }
 
+.lead-card strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
 .lead-card span,
 .lead-card small {
   color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
 }
 
 .lead-card b {
@@ -2297,14 +2362,26 @@ label {
 .task-list,
 .note-list {
   display: grid;
-  gap: 8px;
+  gap: 10px;
+}
+
+#crmTasks {
+  max-height: 260px;
+  overflow-y: auto;
+  margin-top: 10px;
+  padding-right: 4px;
 }
 
 .task-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid #e8ecef;
+  border-radius: 7px;
+  background: #fbfcfd;
   color: var(--ink);
   font-size: 14px;
 }
@@ -2327,6 +2404,10 @@ label {
   width: 20px;
   height: 20px;
   min-height: 20px;
+}
+
+.task-row .mini-button {
+  justify-self: end;
 }
 
 .project-task-layout {
