@@ -229,6 +229,11 @@
                 <button id="distanceLookupBtn" class="secondary" type="button">Estimate distance</button>
                 <p id="distanceLookupNote" class="helper-note"></p>
               </section>
+              <div class="estimate-scope-bar" aria-label="Estimate type">
+                <button class="estimate-scope-option active" type="button" data-estimate-scope="all">All</button>
+                <button class="estimate-scope-option" type="button" data-estimate-scope="rtm">RTM Estimate</button>
+                <button class="estimate-scope-option" type="button" data-estimate-scope="site">Site Estimate</button>
+              </div>
               <div class="section-toolbar">
                 <label>
                   Search line items
@@ -246,6 +251,20 @@
 
             <aside class="totals-panel">
               <h3>Estimate Totals</h3>
+              <div class="estimate-total-split">
+                <article>
+                  <span>RTM total</span>
+                  <strong id="rtmEstimateTotal">$0</strong>
+                </article>
+                <article>
+                  <span>Site total</span>
+                  <strong id="siteEstimateTotal">$0</strong>
+                </article>
+                <article class="combined">
+                  <span>Combined total</span>
+                  <strong id="combinedEstimateTotal">$0</strong>
+                </article>
+              </div>
               <dl class="totals">
                 <div><dt>Cost</dt><dd id="totalCost">$0</dd></div>
                 <div><dt>Retail before tax</dt><dd id="totalRetail">$0</dd></div>

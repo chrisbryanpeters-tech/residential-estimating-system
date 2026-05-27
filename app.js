@@ -8,6 +8,7 @@ const els = {};
 const state = {
   library: null,
   lines: [],
+  estimateViewMode: "all",
   expanded: new Set(),
   openCalcLineId: null,
   calcValues: {},
@@ -284,10 +285,1554 @@ const outputGroups = [
   { title: "Custom Cabinetry and Railing", sections: ["Cabinets", "Custom Work"], include: ["cabinet", "vanit", "counter", "backsplash", "railing", "bench"] },
   { title: "Electrical", sections: ["Electrical"] },
   { title: "Plumbing", sections: ["Plumbing/Mechanical"] },
+  { title: "Site Work", sections: ["Site Estimate - Project Materials", "Site Estimate - Foundation", "Site Estimate - Septic", "Site Estimate - Framing", "Site Estimate - Roofing", "Site Estimate - Plumbing/Mechanical", "Site Estimate - Electrical", "Site Estimate - Exterior", "Site Estimate - Insulation", "Site Estimate - Drywall", "Site Estimate - Mud & Tape", "Site Estimate - Paint", "Site Estimate - Finishing", "Site Estimate - Cabinets", "Site Estimate - Flooring", "Site Estimate - Custom Work", "Site Estimate - Miscellaneous", "Site Estimate - Project Costs"] },
   { title: "Base Moving Costs", sections: ["Miscellaneous", "Project Costs"], include: ["moving", "move", "delivery", "deliveries", "transport"] },
 ];
 
 const proposalSectionTitles = [...outputGroups.map((group) => group.title), "Other Included Items", "Value Added Opportunities"];
+
+const siteEstimateTemplates = [
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "RTM/  House",
+    "description": "Standard House Material Package",
+    "note": "($52 - $58 Per Sq/Ft)",
+    "quantitySource": "houseSqft",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 54
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "Floors",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "Trusses",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 4
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "08",
+    "category": "",
+    "description": "Windows",
+    "note": "Enter Data In Window Table",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "Doors",
+    "note": "Enter Date in Door Table",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "07",
+    "category": "",
+    "description": "Windows Colors Upgrades",
+    "note": "Enter Percentage - See Note",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "07",
+    "category": "",
+    "description": "Tall Walls",
+    "note": "(9' = Add $2, 10' = Add $4)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 2
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "07",
+    "category": "",
+    "description": "Metal Roof Upgrade",
+    "note": "*Includes 1/2\" Fir Upgrade (Tuff-Rib = $2, Snaplock = $4)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 4
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "07",
+    "category": "",
+    "description": "Upgraded Shingles",
+    "note": "($10-$20/ Bundle Upgrade)",
+    "quantitySource": "",
+    "unit": "Weeks",
+    "unitCost": 15
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "08",
+    "category": "",
+    "description": "Upgraded Siding",
+    "note": "(Hardie = $4, Canexel/Smartside = $5)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 4
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "08",
+    "category": "=\"$\"&W21&\"/SqFt\"&\"    Cost\"",
+    "description": "Board & Baton",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 5
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "Deck Framing Materials (DNI Stairs)",
+    "note": "Covered Deck = $25 - $30, Standard Deck = $5 - $8",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 25
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "Decking Materials",
+    "note": "ACQ = $4.50, Composite = $18.75, Fir Select = $5",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 4.5
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "Deck Railing",
+    "note": "Regal, Add $30 Per LF For Std Glass",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 65
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "09",
+    "category": "",
+    "description": "Pine Ceiling",
+    "note": "(Knotty = $2.75, Primed = $4.25)",
+    "quantitySource": "",
+    "unit": "Sq/Ft",
+    "unitCost": 2.75
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "07",
+    "category": "",
+    "description": "Cedar Shakes",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 5
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "RTM Stairs",
+    "note": "($50 - $55 Per Rise)",
+    "quantitySource": "",
+    "unit": "Per Unit",
+    "unitCost": 55
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "Upgraded Interior Doors",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "Garage",
+    "description": "Standard Garage Material Package",
+    "note": "($25 - $30 Per Sq/Ft)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 25
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "08",
+    "category": "",
+    "description": "Upgraded Overhead Doors/Operator",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "08",
+    "category": "",
+    "description": "Windows Color Exterior Upgrade",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0.1
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "08",
+    "category": "",
+    "description": "Extra Windows/Doors",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "=\"$\"&W22&\"/SqFt\"&\"    Cost\"",
+    "description": "Garage Stairs",
+    "note": "($50 - $55 Per Rise)",
+    "quantitySource": "",
+    "unit": "Per Unit",
+    "unitCost": 55
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "Landing & Wood Railing",
+    "note": "($750 - $1000)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 800
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "Bsmt",
+    "description": "Basement Interior Material Package",
+    "note": "(Stairwell/Mech = $3, Full Basement = $12-$15)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 14
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "09",
+    "category": "",
+    "description": "Suspended Ceiling Upgrade",
+    "note": "(Standard 2x2 Tile = $3 Upgrade From Textured)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 3
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "Basement Stairs",
+    "note": "($50 - $55 Per Rise)",
+    "quantitySource": "",
+    "unit": "Per Unit",
+    "unitCost": 55
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "Sitework",
+    "description": "Deck Framing Materials (DNI Stairs)",
+    "note": "Covered Deck = $25 - $30, Standard Deck = $5 - $8",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 25
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "Deck Framing Materials (DNI Stairs)",
+    "note": "Covered Deck = $25 - $30, Standard Deck = $5 - $8",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 7
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "Deck Stairs",
+    "note": "(Ex: 4'H x 4'W = $400, NIC Decking)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 400
+  },
+  {
+    "section": "Site Estimate - Project Materials",
+    "code": "06",
+    "category": "",
+    "description": "Decking Materials",
+    "note": "ACQ = $4.50, Composite = $18.75, Fir Select = $5",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 4.5
+  },
+  {
+    "section": "Site Estimate - Foundation",
+    "code": "03",
+    "category": "M&L",
+    "description": "Basement",
+    "note": "ICF",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Foundation",
+    "code": "03",
+    "category": "M&L",
+    "description": "Garage",
+    "note": "Concrete",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Foundation",
+    "code": "03",
+    "category": "M&L",
+    "description": "Piles",
+    "note": "Screw",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Foundation",
+    "code": "03",
+    "category": "M&L",
+    "description": "Apron",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Foundation",
+    "code": "03",
+    "category": "M&L",
+    "description": "Floor Heat Lines & Styro",
+    "note": "($4.50 Per Sq/Ft)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 4.5
+  },
+  {
+    "section": "Site Estimate - Septic",
+    "code": "31",
+    "category": "M&L",
+    "description": "Septic Tank",
+    "note": "Must Be Quoted, $15,000 Is Budget)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 15000
+  },
+  {
+    "section": "Site Estimate - Septic",
+    "code": "31",
+    "category": "M&L",
+    "description": "Holding Tank",
+    "note": "(Budget $10,000-$12,000)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 7000
+  },
+  {
+    "section": "Site Estimate - Septic",
+    "code": "31",
+    "category": "M&L",
+    "description": "Septic Mound/Field",
+    "note": "Must Be Quoted",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Framing",
+    "code": "06",
+    "category": "L",
+    "description": "House",
+    "note": "($10-$14 Per Sq/Ft)",
+    "quantitySource": "houseSqft",
+    "unit": "Sq/Ft",
+    "unitCost": 10
+  },
+  {
+    "section": "Site Estimate - Framing",
+    "code": "06",
+    "category": "L",
+    "description": "Garage",
+    "note": "($5-$7 Per Sq/Ft)",
+    "quantitySource": "garageSqft",
+    "unit": "Sq/Ft",
+    "unitCost": 6
+  },
+  {
+    "section": "Site Estimate - Framing",
+    "code": "01",
+    "category": "L",
+    "description": "Telehandler/Genie Freight",
+    "note": "Distance From Zaks:",
+    "quantitySource": "",
+    "unit": "Km",
+    "unitCost": 6.5
+  },
+  {
+    "section": "Site Estimate - Framing",
+    "code": "06",
+    "category": "L",
+    "description": "Covered Deck (Not Including Decking)",
+    "note": "($6-$10 Per Sq/Ft)",
+    "quantitySource": "",
+    "unit": "Sq/Ft",
+    "unitCost": 6
+  },
+  {
+    "section": "Site Estimate - Framing",
+    "code": "06",
+    "category": "L",
+    "description": "Uncovered Deck (Not Including Decking)",
+    "note": "($4-$6 Per Sq/Ft)",
+    "quantitySource": "",
+    "unit": "Sq/Ft",
+    "unitCost": 4
+  },
+  {
+    "section": "Site Estimate - Framing",
+    "code": "06",
+    "category": "L",
+    "description": "Full Basement Interior",
+    "note": "($2 - $2.50 Per Sq/Ft)",
+    "quantitySource": "",
+    "unit": "Sq/Ft",
+    "unitCost": 2
+  },
+  {
+    "section": "Site Estimate - Framing",
+    "code": "06",
+    "category": "L",
+    "description": "Basement Perimeter Walls",
+    "note": "($3-$4 Per Lin/Ft)",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 3
+  },
+  {
+    "section": "Site Estimate - Framing",
+    "code": "06",
+    "category": "L",
+    "description": "Sheeting Underside Simple Homes",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Framing",
+    "code": "06",
+    "category": "L",
+    "description": "Bulkhead Framing",
+    "note": "(Base On Time Estimation)",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Framing",
+    "code": "06",
+    "category": "L",
+    "description": "Stairwell Framing & Stair Install",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Framing",
+    "code": "07",
+    "category": "L",
+    "description": "Styrofoam & Strapping Install",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Roofing",
+    "code": "07",
+    "category": "L",
+    "description": "Fiberglass Shingles",
+    "note": "($35-50 Per Bundle, Depending On Pitch And Height)",
+    "quantitySource": "",
+    "unit": "Bundle",
+    "unitCost": 40
+  },
+  {
+    "section": "Site Estimate - Roofing",
+    "code": "07",
+    "category": "L",
+    "description": "Tuff Rib Metal",
+    "note": "($2 - $4.50 Per Sq/Ft, Depending On Pitch And Height)",
+    "quantitySource": "",
+    "unit": "Sq/Ft",
+    "unitCost": 3
+  },
+  {
+    "section": "Site Estimate - Roofing",
+    "code": "07",
+    "category": "L",
+    "description": "Snaplock Metal",
+    "note": "($2.50 - $5.50 Per Sq/Ft, Depending On Pitch And Height)",
+    "quantitySource": "",
+    "unit": "Sq/Ft",
+    "unitCost": 3.5
+  },
+  {
+    "section": "Site Estimate - Roofing",
+    "code": "07",
+    "category": "L",
+    "description": "Garage Shingles Onsite",
+    "note": "($35-50 Per Bundle, Depending On Pitch And Height)",
+    "quantitySource": "",
+    "unit": "Per Unit",
+    "unitCost": 40
+  },
+  {
+    "section": "Site Estimate - Plumbing/Mechanical",
+    "code": "22",
+    "category": "M&L",
+    "description": "Plumbing/Heating Onsite",
+    "note": "(Must Be Quoted, Standard Budget = $40,000/Exec Budget = $60,000+)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 40000
+  },
+  {
+    "section": "Site Estimate - Plumbing/Mechanical",
+    "code": "22",
+    "category": "M",
+    "description": "Fixtures Allowance",
+    "note": "Sinks/Toilets:",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Plumbing/Mechanical",
+    "code": "10",
+    "category": "M&L",
+    "description": "Gas Fireplace",
+    "note": "(GX36 - $4000 or Budget $4000 - $10,000)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 4000
+  },
+  {
+    "section": "Site Estimate - Plumbing/Mechanical",
+    "code": "10",
+    "category": "M&L",
+    "description": "Wood Fireplace",
+    "note": "($7,000 - $9,000)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 7000
+  },
+  {
+    "section": "Site Estimate - Plumbing/Mechanical",
+    "code": "10",
+    "category": "M&L",
+    "description": "Custom Shower Door Allowance",
+    "note": "($2,200-$3,500)",
+    "quantitySource": "",
+    "unit": "Pce",
+    "unitCost": 2500
+  },
+  {
+    "section": "Site Estimate - Plumbing/Mechanical",
+    "code": "10",
+    "category": "M&L",
+    "description": "Standard Shower Door Allowance",
+    "note": "($1200 - $1500 Including Install)",
+    "quantitySource": "",
+    "unit": "Pce",
+    "unitCost": 1500
+  },
+  {
+    "section": "Site Estimate - Plumbing/Mechanical",
+    "code": "22",
+    "category": "M&L",
+    "description": "Soaker Tub/Jacuzzi Tub Budget",
+    "note": "($1,500 / $2,500)",
+    "quantitySource": "",
+    "unit": "Pce",
+    "unitCost": 1500
+  },
+  {
+    "section": "Site Estimate - Plumbing/Mechanical",
+    "code": "22",
+    "category": "M&L",
+    "description": "Standard Garage Unit Heater",
+    "note": "($3,000 - $3,500)",
+    "quantitySource": "",
+    "unit": "Pce",
+    "unitCost": 3000
+  },
+  {
+    "section": "Site Estimate - Plumbing/Mechanical",
+    "code": "11",
+    "category": "M&L",
+    "description": "Appliance Install",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Electrical",
+    "code": "26",
+    "category": "M&L",
+    "description": "Electrical Site Build",
+    "note": "(Must be Quoted, Standard Budget $9.50 - $10.50 Per SqFt)",
+    "quantitySource": "houseSqft",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 10
+  },
+  {
+    "section": "Site Estimate - Electrical",
+    "code": "26",
+    "category": "M",
+    "description": "Electrical Fixture Allowance",
+    "note": "($1.75 - $2.25 Per SqFt)",
+    "quantitySource": "houseSqft",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 2
+  },
+  {
+    "section": "Site Estimate - Electrical",
+    "code": "26",
+    "category": "M&L",
+    "description": "RTM Electrical Connections Onsite",
+    "note": "(Must Be Quoted, Standard Budget $4.00 - $5.00 Per SqFt)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 4.5
+  },
+  {
+    "section": "Site Estimate - Electrical",
+    "code": "26",
+    "category": "M&L",
+    "description": "Garage Electrical Onsite",
+    "note": "($2 - $2.75 Per SqFt)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 2.25
+  },
+  {
+    "section": "Site Estimate - Electrical",
+    "code": "26",
+    "category": "M&L",
+    "description": "Basement Finish Onsite",
+    "note": "($4.00 - $5.00 Per SqFt)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 4.5
+  },
+  {
+    "section": "Site Estimate - Electrical",
+    "code": "26",
+    "category": "M&L",
+    "description": "Under Cabinet Lighting",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 38
+  },
+  {
+    "section": "Site Estimate - Electrical",
+    "code": "26",
+    "category": "M&L",
+    "description": "Upper Cabinet Lighting",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 38
+  },
+  {
+    "section": "Site Estimate - Electrical",
+    "code": "11",
+    "category": "M&L",
+    "description": "Appliance Install",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Exterior",
+    "code": "07",
+    "category": "L",
+    "description": "House & Garage Siding",
+    "note": "See Siding Calc =>",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Exterior",
+    "code": "07",
+    "category": "L",
+    "description": "House & Garage Soffit & Fasica",
+    "note": "(1 Story = $2.00, 2 Story = $2.50)",
+    "quantitySource": "",
+    "unit": "Sq/Ft",
+    "unitCost": 2.25
+  },
+  {
+    "section": "Site Estimate - Exterior",
+    "code": "08",
+    "category": "L",
+    "description": "Overhead Door Install",
+    "note": "See O/H Door Calc",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Exterior",
+    "code": "06",
+    "category": "L",
+    "description": "Deck Railing",
+    "note": "(ACQ - $15, Regal = $20 - $30)",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 25
+  },
+  {
+    "section": "Site Estimate - Exterior",
+    "code": "06",
+    "category": "L",
+    "description": "Decking Install",
+    "note": "(Composite = $3 - $3.50, Treated/Cedar = $2 - $2.50)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 3.25
+  },
+  {
+    "section": "Site Estimate - Exterior",
+    "code": "06",
+    "category": "L",
+    "description": "Deck Stairs",
+    "note": "(Standard Stairs = $250 - $500, Compostie Stairs = $500 - $1000)",
+    "quantitySource": "",
+    "unit": "Pce",
+    "unitCost": 500
+  },
+  {
+    "section": "Site Estimate - Exterior",
+    "code": "07",
+    "category": "M&L",
+    "description": "Eavestrough & Downspouts",
+    "note": "($7.50 - $9.50 Per Lin Ft)",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 8.25
+  },
+  {
+    "section": "Site Estimate - Exterior",
+    "code": "07",
+    "category": "M&L",
+    "description": "Parging",
+    "note": "($6.50 Per SqFt Standard Grey,  $7.50 Per SqFt Acrylic Color)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 7.5
+  },
+  {
+    "section": "Site Estimate - Exterior",
+    "code": "06",
+    "category": "M&L",
+    "description": "Waterproof Decking",
+    "note": "(Roll on = $15, Tufdek = $18)",
+    "quantitySource": "",
+    "unit": "Sq/Ft",
+    "unitCost": 18
+  },
+  {
+    "section": "Site Estimate - Insulation",
+    "code": "07",
+    "category": "L",
+    "description": "House Wall Batt & Poly (Standard Spacing)",
+    "note": "(R12-R28 - $.60)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 0.6
+  },
+  {
+    "section": "Site Estimate - Insulation",
+    "code": "07",
+    "category": "L",
+    "description": "House Ceilings Batt & Poly (Standard spacing)",
+    "note": "(R40=$.90, R56=$1.00, R60=$1.20)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 1
+  },
+  {
+    "section": "Site Estimate - Insulation",
+    "code": "07",
+    "category": "L",
+    "description": "House Ceiling Blow & Poly",
+    "note": "(R40 = $1.70, R60 = $2.20)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 2.2
+  },
+  {
+    "section": "Site Estimate - Insulation",
+    "code": "07",
+    "category": "M&L",
+    "description": "Spray Foam Joist Ends (R28)",
+    "note": "($10 - $12 Per SqFt, Add $3.50 For Thermobarrier Fire Retardent)",
+    "quantitySource": "",
+    "unit": "Sq/Ft",
+    "unitCost": 10
+  },
+  {
+    "section": "Site Estimate - Insulation",
+    "code": "07",
+    "category": "L",
+    "description": "Garage Wall Batt & Poly (Standard Spacing)",
+    "note": "(R12-R28 - $.60)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 0.6
+  },
+  {
+    "section": "Site Estimate - Insulation",
+    "code": "07",
+    "category": "L",
+    "description": "Garage Ceiling Blow & Poly",
+    "note": "(R40 = $1.70, R60 = $2.20)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 1.7
+  },
+  {
+    "section": "Site Estimate - Insulation",
+    "code": "07",
+    "category": "L",
+    "description": "Interior Wall Soundproofing",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 0.5
+  },
+  {
+    "section": "Site Estimate - Insulation",
+    "code": "07",
+    "category": "M&L",
+    "description": "Spray Foam Floors",
+    "note": "(4.5\" = 7.45, 6\" = 9.65)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 7.45
+  },
+  {
+    "section": "Site Estimate - Insulation",
+    "code": "07",
+    "category": "L",
+    "description": "Basement Wall Batt & Poly (Standard Spacing)",
+    "note": "(R12-R28 - $.60)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 0.6
+  },
+  {
+    "section": "Site Estimate - Insulation",
+    "code": "07",
+    "category": "L",
+    "description": "Exterior Styrofoam Install",
+    "note": "($1 - $1.50 Per SqFt??)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 1.25
+  },
+  {
+    "section": "Site Estimate - Drywall",
+    "code": "09",
+    "category": "L",
+    "description": "House Walls",
+    "note": "($.55 - $.70, Depends On Wall Height)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 0.55
+  },
+  {
+    "section": "Site Estimate - Drywall",
+    "code": "09",
+    "category": "L",
+    "description": "House Ceilings",
+    "note": "($.55 - $.70, Depends On Wall Height)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 0.6
+  },
+  {
+    "section": "Site Estimate - Drywall",
+    "code": "09",
+    "category": "L",
+    "description": "Garage Walls",
+    "note": "($.55 - $.70, Depends On Wall Height)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 0.55
+  },
+  {
+    "section": "Site Estimate - Drywall",
+    "code": "09",
+    "category": "L",
+    "description": "Garage Ceilings",
+    "note": "($.55 - $.70, Depends On Wall Height)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 0.65
+  },
+  {
+    "section": "Site Estimate - Drywall",
+    "code": "09",
+    "category": "L",
+    "description": "Basement Walls",
+    "note": "($.55 - $.70, Depends On Wall Height)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 0.55
+  },
+  {
+    "section": "Site Estimate - Drywall",
+    "code": "09",
+    "category": "L",
+    "description": "Basement Ceilings",
+    "note": "($.55 - $.70, Depends On Wall Height)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 0.6
+  },
+  {
+    "section": "Site Estimate - Mud & Tape",
+    "code": "09",
+    "category": "L",
+    "description": "Standard House",
+    "note": "($3.25 - $3.75 With Text. Ceilings, $2.50 - $3.25 No Ceilings, Standard Heights)",
+    "quantitySource": "houseSqft",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 2.5
+  },
+  {
+    "section": "Site Estimate - Mud & Tape",
+    "code": "09",
+    "category": "M&L",
+    "description": "House Paint Grade Ceiling Upgrade",
+    "note": "(Includes Extra Mud&Tape Labor & Materials)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 1.5
+  },
+  {
+    "section": "Site Estimate - Mud & Tape",
+    "code": "09",
+    "category": "L",
+    "description": "Standard Garage",
+    "note": "($3.25 - $3.75 With Text. Ceilings, $2.50 - $3.25 No Ceilings, Standard Heights)",
+    "quantitySource": "garageSqft",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 2.75
+  },
+  {
+    "section": "Site Estimate - Mud & Tape",
+    "code": "09",
+    "category": "M&L",
+    "description": "Garage Paint Grade Ceiling Upgrade",
+    "note": "(Includes Extra Mud&Tape Labor & Materials)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 1.65
+  },
+  {
+    "section": "Site Estimate - Mud & Tape",
+    "code": "09",
+    "category": "L",
+    "description": "Basement",
+    "note": "($3.25 - $3.75 With Text. Ceilings, $2.50 - $3.25 No Ceilings, Standard Heights)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 2.5
+  },
+  {
+    "section": "Site Estimate - Paint",
+    "code": "09",
+    "category": "L",
+    "description": "Wall Height 1",
+    "note": "Ceiling Finish:",
+    "quantitySource": "",
+    "unit": "Wall Height:",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Paint",
+    "code": "09",
+    "category": "L",
+    "description": "Wall Height 2",
+    "note": "Ceiling Finish:",
+    "quantitySource": "",
+    "unit": "Wall Height:",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Paint",
+    "code": "09",
+    "category": "L",
+    "description": "Wall Height 3",
+    "note": "Ceiling Finish:",
+    "quantitySource": "",
+    "unit": "Wall Height:",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Paint",
+    "code": "09",
+    "category": "L",
+    "description": "Ceiling/Nickel Gap Paint",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Wall Height:",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Paint",
+    "code": "09",
+    "category": "L",
+    "description": "Pine Staining",
+    "note": "Pine Finish:",
+    "quantitySource": "",
+    "unit": "Case Fill:",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Paint",
+    "code": "09",
+    "category": "L",
+    "description": "Doors/Trim",
+    "note": "Doors Finish:",
+    "quantitySource": "",
+    "unit": "Door Qty: ",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Paint",
+    "code": "09",
+    "category": "L",
+    "description": "Exterior Doors/Sidelights (Per Side)",
+    "note": "Door Qty:",
+    "quantitySource": "",
+    "unit": "Sidelight Qty:",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Paint",
+    "code": "09",
+    "category": "L",
+    "description": "Custom MDF Shelving",
+    "note": "Approx. Shelf Qty:",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Finishing",
+    "code": "06",
+    "category": "L",
+    "description": "House",
+    "note": "(Good = $3, Better = $4, Best = $5-$6 Per SqFt)",
+    "quantitySource": "houseSqft",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 3.5
+  },
+  {
+    "section": "Site Estimate - Finishing",
+    "code": "06",
+    "category": "L",
+    "description": "Basement",
+    "note": "(Good = $3, Better = $4, Best = $5-$6 Per SqFt)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 3
+  },
+  {
+    "section": "Site Estimate - Finishing",
+    "code": "06",
+    "category": "L",
+    "description": "Pine Ceilings",
+    "note": "(8'-10' = $3.50, 11'-13' = $4.50, 14'-20' = $5.50, < 20' = Talk To Installer)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 3.5
+  },
+  {
+    "section": "Site Estimate - Finishing",
+    "code": "06",
+    "category": "L",
+    "description": "Ceiling Tile",
+    "note": "($2 - $3 Per Sq/Ft)",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 2.25
+  },
+  {
+    "section": "Site Estimate - Finishing",
+    "code": "06",
+    "category": "L",
+    "description": "Garage Trims and Rubber Base",
+    "note": "Get Quote",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Finishing",
+    "code": "06",
+    "category": "L",
+    "description": "Reline & 1x4 Install",
+    "note": "($2 For 8-12', 3 For 13'-16\")",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 2
+  },
+  {
+    "section": "Site Estimate - Cabinets",
+    "code": "06",
+    "category": "M",
+    "description": "Cabinetry Allowance",
+    "note": "Click Here For Details",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 400
+  },
+  {
+    "section": "Site Estimate - Cabinets",
+    "code": "06",
+    "category": "M&L",
+    "description": "Countertops Allowance",
+    "note": "Click Here For Details",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 80
+  },
+  {
+    "section": "Site Estimate - Cabinets",
+    "code": "06",
+    "category": "L",
+    "description": "Cabinetry & Counter Install",
+    "note": "Click Here For Details",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 90
+  },
+  {
+    "section": "Site Estimate - Flooring",
+    "code": "09",
+    "category": "M&L",
+    "description": "House Allowance",
+    "note": "Click Here For Details",
+    "quantitySource": "houseSqft",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 8
+  },
+  {
+    "section": "Site Estimate - Flooring",
+    "code": "09",
+    "category": "M&L",
+    "description": "Basement Allowance",
+    "note": "Click Here For Details",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 8
+  },
+  {
+    "section": "Site Estimate - Flooring",
+    "code": "09",
+    "category": "M&L",
+    "description": "Tile Shower Allowance (Click To View Pricing)",
+    "note": "($18 - $30 Depending On Tile Size)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 20
+  },
+  {
+    "section": "Site Estimate - Flooring",
+    "code": "09",
+    "category": "M&L",
+    "description": "6\" Vanity Backsplash Allowance (Click To View Pricing)",
+    "note": "($35 - $45 Depending On Tile Size, Min $500)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 40
+  },
+  {
+    "section": "Site Estimate - Flooring",
+    "code": "09",
+    "category": "M&L",
+    "description": "18\" Kitchen Backsplash Allowance (Click To View Pricing)",
+    "note": "($35 - $45 Depending On Tile Size, Min $500)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 40
+  },
+  {
+    "section": "Site Estimate - Flooring",
+    "code": "09",
+    "category": "M&L",
+    "description": "Custom Tile Shower (Click To View Pricing)",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "06",
+    "category": "M&L",
+    "description": "Interior Railing",
+    "note": "($250 - $300 Per Lin/Ft)",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 250
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "04",
+    "category": "M&L",
+    "description": "Exterior Stone Budget",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 50
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "04",
+    "category": "M&L",
+    "description": "Interior Stone Budget",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 50
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "06",
+    "category": "M&L",
+    "description": "Standard Barn Door Package",
+    "note": "(Includes Track & Hardware)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 800
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "06",
+    "category": "M&L",
+    "description": "Standard Pine Barn Door Package",
+    "note": "(Includes Track & Hardware)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 1200
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "06",
+    "category": "M&L",
+    "description": "Mantles",
+    "note": "($1000 - $1800)",
+    "quantitySource": "",
+    "unit": "Per Unit",
+    "unitCost": 1500
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "06",
+    "category": "M&L",
+    "description": "Milled Interior Beams/Posts",
+    "note": "$70-$85/LnFt, Min 50'",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 75
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "06",
+    "category": "M&L",
+    "description": "Exterior Decorative Trusses",
+    "note": "($750 - $1000 Each)",
+    "quantitySource": "",
+    "unit": "Pce",
+    "unitCost": 750
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "06",
+    "category": "M&L",
+    "description": "Shiplap Walls",
+    "note": "(MDF 7.5\" = $3.00 Per Sq/Ft,  Nickel/Pine = $4 Per Sq/Ft)",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 10
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "06",
+    "category": "M&L",
+    "description": "Custom Built Cabinetry",
+    "note": "($500 - $600)",
+    "quantitySource": "",
+    "unit": "Ln/Ft",
+    "unitCost": 500
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "06",
+    "category": "M&L",
+    "description": "Wainscotting",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Wall Sq/Ft",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "06",
+    "category": "M&L",
+    "description": "Custom MDF Shelving Upgrade",
+    "note": "(Includes Material Upgrade, Install Labor)",
+    "quantitySource": "",
+    "unit": "Per Shelf",
+    "unitCost": 25
+  },
+  {
+    "section": "Site Estimate - Custom Work",
+    "code": "06",
+    "category": "M&L",
+    "description": "Custom Cabinetry Closets",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Miscellaneous",
+    "code": "01",
+    "category": "L",
+    "description": "Final Cleaning",
+    "note": "(Approx. 1hr Of Cleaning Per 100 Sqft)",
+    "quantitySource": "houseSqft",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 1
+  },
+  {
+    "section": "Site Estimate - Miscellaneous",
+    "code": "08",
+    "category": "M&L",
+    "description": "Crawl Space Hatch Kit",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Per Unit",
+    "unitCost": 500
+  },
+  {
+    "section": "Site Estimate - Miscellaneous",
+    "code": "09",
+    "category": "M&L",
+    "description": "Epoxy Flooring",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 6
+  },
+  {
+    "section": "Site Estimate - Miscellaneous",
+    "code": "11",
+    "category": "M",
+    "description": "Appliances",
+    "note": "(Must be quoted)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Miscellaneous",
+    "code": "11",
+    "category": "M&L",
+    "description": "Appliance Set Up",
+    "note": "(Plumber Install Of Standard OTR & Dishwasher)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 300
+  },
+  {
+    "section": "Site Estimate - Miscellaneous",
+    "code": "11",
+    "category": "M&L",
+    "description": "Appliance Placement",
+    "note": "($75 Per Appliance Package)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 75
+  },
+  {
+    "section": "Site Estimate - Project Costs",
+    "code": "01",
+    "category": "L",
+    "description": "PM & SS Fees (Based on Complexity/Distance/Size)",
+    "note": "RTM (1-2%), Site Build (3-6%)",
+    "quantitySource": "",
+    "unit": "Of",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Project Costs",
+    "code": "01",
+    "category": "L",
+    "description": "Project Service Work",
+    "note": "Simple (40hrs), Avg RTM (80hrs), Executive (120hrs)",
+    "quantitySource": "",
+    "unit": "Hours",
+    "unitCost": 75
+  },
+  {
+    "section": "Site Estimate - Project Costs",
+    "code": "01",
+    "category": "L",
+    "description": "Deliveries (10-15)",
+    "note": "Distance From Zaks:",
+    "quantitySource": "travelDistance",
+    "unit": "Km",
+    "unitCost": 7
+  },
+  {
+    "section": "Site Estimate - Project Costs",
+    "code": "01",
+    "category": "L",
+    "description": "Travel Budget",
+    "note": "Distance From Zaks:",
+    "quantitySource": "",
+    "unit": "Km",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Project Costs",
+    "code": "01",
+    "category": "M&L",
+    "description": "Disposal",
+    "note": "($1,000 Per Month)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 1000
+  },
+  {
+    "section": "Site Estimate - Project Costs",
+    "code": "01",
+    "category": "M&L",
+    "description": "Porta Pottie",
+    "note": "Delivery plus bi-monthly service- $2.40km>50km (Potti $100 Per Week)",
+    "quantitySource": "",
+    "unit": "Weeks",
+    "unitCost": 150
+  },
+  {
+    "section": "Site Estimate - Project Costs",
+    "code": "01",
+    "category": "M&L",
+    "description": "Contingency",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Of",
+    "unitCost": 0
+  },
+  {
+    "section": "Site Estimate - Project Costs",
+    "code": "01",
+    "category": "L",
+    "description": "Residential Drafting",
+    "note": "(No Charge On M&L Build, Otherwise $1.25 Per Sq/Ft)",
+    "quantitySource": "houseSqft",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 1.25
+  },
+  {
+    "section": "Site Estimate - Project Costs",
+    "code": "01",
+    "category": "L",
+    "description": "Progressive Warranty",
+    "note": "(RTM (NIC Sitework) = $450, Reg Site = $725, Lrg Site = $1250)",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 450
+  },
+  {
+    "section": "Site Estimate - Project Costs",
+    "code": "01",
+    "category": "L",
+    "description": "Code Review",
+    "note": "",
+    "quantitySource": "",
+    "unit": "Package",
+    "unitCost": 1000
+  },
+  {
+    "section": "Site Estimate - Project Costs",
+    "code": "00",
+    "category": "L",
+    "description": "Engineering Tall Wall",
+    "note": "",
+    "quantitySource": "houseSqft",
+    "unit": "Floor Sq/Ft",
+    "unitCost": 1
+  }
+];
 
 const contractInclusionOptions = [
   "Project drawings and specifications attached to this agreement",
@@ -864,7 +2409,7 @@ function sectionMargin(sectionName) {
 
 function createEstimateLines({ blank = false } = {}) {
   const inputs = projectInputs();
-  return state.library.line_items.map((item, index) => {
+  const rtmLines = state.library.line_items.map((item, index) => {
     const line = {
       id: `${item.section_sort}-${item.source_row}-${index}`,
       section: item.section,
@@ -891,6 +2436,38 @@ function createEstimateLines({ blank = false } = {}) {
     line.proposalSection = defaultProposalSection(line);
     return line;
   });
+  return [...rtmLines, ...createSiteEstimateLines({ blank, startIndex: rtmLines.length })];
+}
+
+function createSiteEstimateLines({ blank = false, startIndex = 0 } = {}) {
+  return siteEstimateTemplates.map((item, index) => {
+    const line = {
+      id: `site-${index + 1}-${item.description.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
+      section: item.section,
+      sourceRow: "",
+      code: item.code || "",
+      category: cleanCategory(item.category),
+      description: item.description,
+      customerDescription: "",
+      note: item.note || "",
+      quantity: "",
+      quantitySource: item.quantitySource || "",
+      quantityManual: true,
+      unit: item.unit || "Package",
+      unitCost: blank ? "" : item.unitCost,
+      margin: blank ? "" : item.margin ?? sectionMargin(item.section),
+      pst: true,
+      gst: true,
+      visible: true,
+      includeProposal: false,
+      includeContract: false,
+      proposalSection: "Site Work",
+      proposalSort: (startIndex + index + 1) * 10,
+      proposalIndent: 0,
+      isSiteEstimate: true,
+    };
+    return line;
+  });
 }
 
 function hydrateLines() {
@@ -899,7 +2476,7 @@ function hydrateLines() {
   state.allowanceValues = {};
   state.openCalcLineId = null;
   moveContingencyUnderPmFees();
-  state.library.sections.forEach((section) => state.expanded.add(section.section_name));
+  estimateSections().forEach((section) => state.expanded.add(section.section_name));
 }
 
 function hydrateBlankEstimate() {
@@ -908,7 +2485,7 @@ function hydrateBlankEstimate() {
   state.allowanceValues = {};
   state.openCalcLineId = null;
   moveContingencyUnderPmFees();
-  state.library.sections.forEach((section) => state.expanded.add(section.section_name));
+  estimateSections().forEach((section) => state.expanded.add(section.section_name));
 }
 
 function serializeEstimateState() {
@@ -917,6 +2494,7 @@ function serializeEstimateState() {
       id: line.id,
       category: line.category,
       description: line.description,
+      isSiteEstimate: Boolean(line.isSiteEstimate),
       customerDescription: line.customerDescription || "",
       proposalSection: line.proposalSection || defaultProposalSection(line),
       proposalSort: num(line.proposalSort),
@@ -1041,7 +2619,11 @@ function sectionTotals(sectionName, inputs = projectInputs()) {
 }
 
 function grandTotals() {
-  return state.lines.reduce(
+  return totalsForLines(state.lines);
+}
+
+function totalsForLines(lines) {
+  return lines.reduce(
     (acc, line) => {
       const totals = lineTotals(line);
       acc.cost += totals.cost;
@@ -1057,8 +2639,10 @@ function grandTotals() {
 
 function estimateSnapshot() {
   const totals = grandTotals();
+  const rtmTotals = totalsForLines(state.lines.filter((line) => !line.isSiteEstimate && !isSiteEstimateSection(line.section)));
+  const siteTotals = totalsForLines(state.lines.filter((line) => line.isSiteEstimate || isSiteEstimateSection(line.section)));
   const lines = state.lines
-    .filter((line) => line.visible && (num(line.quantity) || num(line.unitCost)))
+    .filter((line) => line.visible && (num(line.quantity) || num(line.unitCost) || (line.isSiteEstimate && (line.includeProposal || line.includeContract))))
     .map((line) => {
       const lineTotal = lineTotals(line);
       return {
@@ -1067,6 +2651,7 @@ function estimateSnapshot() {
         code: line.code,
         category: line.category,
         description: line.description,
+        isSiteEstimate: Boolean(line.isSiteEstimate),
         customerDescription: line.customerDescription || "",
         proposalSection: line.proposalSection || defaultProposalSection(line),
         proposalSort: num(line.proposalSort),
@@ -1085,6 +2670,8 @@ function estimateSnapshot() {
     });
   return {
     totals,
+    rtmTotals,
+    siteTotals,
     lines,
     fingerprint: JSON.stringify(
       lines.map((line) => [
@@ -1155,8 +2742,13 @@ function syncProjectQuantities() {
 
 function updateTotals() {
   const totals = grandTotals();
+  const rtmTotals = totalsForLines(state.lines.filter((line) => !line.isSiteEstimate && !isSiteEstimateSection(line.section)));
+  const siteTotals = totalsForLines(state.lines.filter((line) => line.isSiteEstimate || isSiteEstimateSection(line.section)));
   const margin = totals.retail > 0 ? (1 - totals.cost / totals.retail) * 100 : 0;
   const sqft = num(els.houseSqft.value);
+  els.rtmEstimateTotal.textContent = money.format(rtmTotals.total);
+  els.siteEstimateTotal.textContent = money.format(siteTotals.total);
+  els.combinedEstimateTotal.textContent = money.format(totals.total);
   els.totalCost.textContent = money.format(totals.cost);
   els.totalRetail.textContent = money.format(totals.retail);
   els.totalPst.textContent = money.format(totals.pst);
@@ -1166,10 +2758,34 @@ function updateTotals() {
   els.priceSqft.textContent = sqft > 0 ? money.format(totals.total / sqft) : "$0";
 }
 
+function estimateSections() {
+  const librarySections = state.library?.sections || [];
+  const seen = new Set(librarySections.map((section) => section.section_name));
+  const extraSections = [];
+  (state.lines || []).forEach((line) => {
+    const sectionName = line.section;
+    if (!sectionName || seen.has(sectionName)) return;
+    seen.add(sectionName);
+    extraSections.push({ section_name: sectionName, section_sort: 9000 + extraSections.length });
+  });
+  return [...librarySections, ...extraSections];
+}
+
+function isSiteEstimateSection(sectionName = "") {
+  return String(sectionName).startsWith("Site Estimate -");
+}
+
+function isSectionVisibleForEstimateMode(sectionName = "") {
+  if (state.estimateViewMode === "site") return isSiteEstimateSection(sectionName);
+  if (state.estimateViewMode === "rtm") return !isSiteEstimateSection(sectionName);
+  return true;
+}
+
 function filteredSections() {
   const search = els.searchInput.value.trim().toLowerCase();
   const filter = els.sectionFilter.value;
-  return state.library.sections.filter((section) => {
+  return estimateSections().filter((section) => {
+    if (!isSectionVisibleForEstimateMode(section.section_name)) return false;
     if (filter !== "All" && section.section_name !== filter) return false;
     if (!search) return true;
     if (section.section_name.toLowerCase().includes(search)) return true;
@@ -1187,14 +2803,16 @@ function filteredSections() {
 function renderSections() {
   const inputs = projectInputs();
   els.sectionsList.innerHTML = "";
+  updateEstimateScopeControls();
   for (const section of filteredSections()) {
     const totals = sectionTotals(section.section_name, inputs);
     const expanded = state.expanded.has(section.section_name);
     const wrapper = document.createElement("article");
-    wrapper.className = "estimate-section";
+    const siteSection = isSiteEstimateSection(section.section_name);
+    wrapper.className = `estimate-section ${siteSection ? "site-estimate-section" : "rtm-estimate-section"}`;
     wrapper.innerHTML = `
       <button class="section-head" data-toggle-section="${section.section_name}">
-        <div><strong>${section.section_name}</strong><br><span>${state.lines.filter((line) => line.section === section.section_name).length} line items</span></div>
+        <div><small>${siteSection ? "Site Estimate" : "RTM Estimate"}</small><strong>${section.section_name}</strong><br><span>${state.lines.filter((line) => line.section === section.section_name).length} line items</span></div>
         <span>Cost ${money.format(totals.cost)}</span>
         <span>Retail ${money.format(totals.retail)}</span>
         <span>Tax ${money.format(totals.pst + totals.gst)}</span>
@@ -1204,6 +2822,23 @@ function renderSections() {
     `;
     els.sectionsList.appendChild(wrapper);
   }
+  if (!els.sectionsList.innerHTML) {
+    els.sectionsList.innerHTML = `<p class="empty-note">No estimate sections match this view.</p>`;
+  }
+}
+
+function updateEstimateScopeControls() {
+  const counts = {
+    all: estimateSections().length,
+    rtm: estimateSections().filter((section) => !isSiteEstimateSection(section.section_name)).length,
+    site: estimateSections().filter((section) => isSiteEstimateSection(section.section_name)).length,
+  };
+  document.querySelectorAll("[data-estimate-scope]").forEach((button) => {
+    const scope = button.dataset.estimateScope;
+    button.classList.toggle("active", state.estimateViewMode === scope);
+    const label = scope === "all" ? "All" : scope === "rtm" ? "RTM Estimate" : "Site Estimate";
+    button.textContent = `${label} (${counts[scope] || 0})`;
+  });
 }
 
 function renderLineTable(sectionName) {
@@ -1980,6 +3615,8 @@ function saveEstimateVersion() {
     projectName: els.projectName.value || "",
     projectType: els.projectType.value || "",
     totals: snapshot.totals,
+    rtmTotals: snapshot.rtmTotals,
+    siteTotals: snapshot.siteTotals,
     lines: snapshot.lines,
     fingerprint: snapshot.fingerprint,
   };
@@ -2208,6 +3845,8 @@ function selectedProposalEstimate() {
     projectName: els.projectName?.value || "",
     projectType: els.projectType?.value || "",
     totals: snapshot.totals,
+    rtmTotals: snapshot.rtmTotals,
+    siteTotals: snapshot.siteTotals,
     lines: snapshot.lines,
   };
 }
@@ -2215,6 +3854,24 @@ function selectedProposalEstimate() {
 function proposalLines(estimate = selectedProposalEstimate()) {
   return [...estimate.lines.filter((line) => (line.visible === undefined || line.visible) && line.includeProposal !== false), ...outputScopeLines("proposal")]
     .sort((a, b) => num(a.proposalSort, 9999) - num(b.proposalSort, 9999) || String(a.description).localeCompare(String(b.description)));
+}
+
+function estimateSplitTotals(estimate) {
+  const fallback = (site) =>
+    (estimate.lines || []).reduce(
+      (acc, line) => {
+        const matches = Boolean(line.isSiteEstimate || isSiteEstimateSection(line.section)) === site;
+        if (!matches) return acc;
+        acc.retail += num(line.retail);
+        acc.total += num(line.total);
+        return acc;
+      },
+      { retail: 0, total: 0 },
+    );
+  return {
+    rtm: estimate.rtmTotals || fallback(false),
+    site: estimate.siteTotals || fallback(true),
+  };
 }
 
 function formatQuantity(value) {
@@ -2231,6 +3888,7 @@ function lineOutputText(line) {
 }
 
 function outputGroupForLine(line) {
+  if (line.isSiteEstimate || String(line.section || "").startsWith("Site Estimate -")) return outputGroups.find((group) => group.title === "Site Work");
   const section = line.section;
   const description = line.description.toLowerCase();
   return outputGroups.find((group) => {
@@ -2262,6 +3920,7 @@ function renderEstimateOutput() {
   const output = outputState();
   const estimate = selectedProposalEstimate();
   const totals = estimate.totals;
+  const splitTotals = estimateSplitTotals(estimate);
   const groups = groupedProposalLines(estimate);
   const projectName = estimate.projectName || els.projectName?.value || "Project";
   const customerName = estimate.customerName || els.customerName?.value || "";
@@ -2329,6 +3988,11 @@ function renderEstimateOutput() {
   `;
   const pageTwo = `
     ${secondPageGroups.length ? groupMarkup(secondPageGroups) : `<h3>Budget Estimate Includes Continued:</h3>`}
+    <div class="proposal-total-breakdown">
+      <div><span>RTM portion</span><strong>${money.format(splitTotals.rtm.total)}</strong></div>
+      <div><span>Site portion</span><strong>${money.format(splitTotals.site.total)}</strong></div>
+      <div class="combined"><span>Combined total</span><strong>${money.format(totals.total)}</strong></div>
+    </div>
     <div class="proposal-subtotal"><span>Subtotal material & labor - Budget Pricing Only</span><strong>${money.format(totals.retail)}</strong></div>
     <p class="proposal-tax-note">Plus Applicable Taxes</p>
     <section class="proposal-section">
@@ -2576,6 +4240,8 @@ function selectedContractEstimate() {
     projectName: els.projectName?.value || "",
     projectType: els.projectType?.value || "",
     totals: snapshot.totals,
+    rtmTotals: snapshot.rtmTotals,
+    siteTotals: snapshot.siteTotals,
     lines: snapshot.lines,
   };
 }
@@ -2597,6 +4263,7 @@ function renderContract() {
   if (!els.contractPreview) return;
   const contract = contractState();
   const estimate = selectedContractEstimate();
+  const splitTotals = estimateSplitTotals(estimate);
   const included = contractInclusionOptions.filter((item) => contract.inclusions[item]);
   const excluded = contractExclusionOptions.filter((item) => contract.exclusions[item]);
   const activeLines = estimate.lines
@@ -2652,6 +4319,8 @@ function renderContract() {
       <div><dt>Location:</dt><dd>${escapeAttr(contract.location || "Not set")}</dd></div>
       <div><dt>Contract date:</dt><dd>${escapeAttr(prettyDate(contract.date))}</dd></div>
       <div><dt>Estimate version:</dt><dd>${escapeAttr(estimate.versionName)}</dd></div>
+      <div><dt>RTM amount:</dt><dd>${escapeAttr(money.format(splitTotals.rtm.total))}</dd></div>
+      <div><dt>Site amount:</dt><dd>${escapeAttr(money.format(splitTotals.site.total))}</dd></div>
       <div><dt>Contract amount:</dt><dd>${escapeAttr(money.format(estimate.totals.total))}</dd></div>
       <div><dt>Approval:</dt><dd>${approved ? `${escapeAttr(contract.approval.approvedBy)} - ${escapeAttr(approvalDate)}` : "Pending owner review"}</dd></div>
     </dl>
@@ -6717,6 +8386,9 @@ async function init() {
     "totalPst",
     "totalGst",
     "grandTotal",
+    "rtmEstimateTotal",
+    "siteEstimateTotal",
+    "combinedEstimateTotal",
     "marginPct",
     "priceSqft",
     "searchInput",
@@ -6966,7 +8638,7 @@ async function init() {
   loadAuthSession();
   hydrateBlankEstimate();
 
-  for (const section of state.library.sections) {
+  for (const section of estimateSections()) {
     const option = document.createElement("option");
     option.value = section.section_name;
     option.textContent = section.section_name;
@@ -7238,6 +8910,13 @@ async function init() {
         state.openCalcLineId = null;
         render();
       }
+      return;
+    }
+    const estimateScopeButton = event.target.closest("[data-estimate-scope]");
+    if (estimateScopeButton) {
+      state.estimateViewMode = estimateScopeButton.dataset.estimateScope || "all";
+      els.sectionFilter.value = "All";
+      renderSections();
       return;
     }
     const toggle = event.target.closest("[data-toggle-section]");

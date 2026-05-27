@@ -492,6 +492,27 @@ label {
   margin: -2px 0 0;
 }
 
+.estimate-scope-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.estimate-scope-option {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.estimate-scope-option.active {
+  border-color: var(--accent);
+  background: #eaf4f3;
+  color: #0f514e;
+}
+
 .section-toolbar {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) 220px;
@@ -515,6 +536,62 @@ label {
 
 .estimate-table-wrap::-webkit-scrollbar-track {
   background: #e7edef;
+}
+
+.estimate-total-split {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.estimate-total-split article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #dfe8eb;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.estimate-total-split span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.estimate-total-split strong {
+  font-size: 18px;
+}
+
+.estimate-total-split .combined {
+  border-color: #113f3d;
+  background: #123f3d;
+  color: #ffffff;
+}
+
+.estimate-total-split .combined span {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.section-head small {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.site-estimate-section .section-head {
+  border-left: 4px solid #b96f00;
+}
+
+.rtm-estimate-section .section-head {
+  border-left: 4px solid var(--accent);
 }
 
 .output-layout {
@@ -1246,6 +1323,31 @@ label {
   border-top: 1px solid #222222;
   text-transform: uppercase;
   font-weight: 800;
+}
+
+.proposal-total-breakdown {
+  display: grid;
+  gap: 7px;
+  margin: 14px 0 10px;
+}
+
+.proposal-total-breakdown div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid #d9e2e4;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-weight: 800;
+}
+
+.proposal-total-breakdown span {
+  color: var(--muted);
+}
+
+.proposal-total-breakdown .combined {
+  border-color: #111111;
+  background: #f4f7f8;
 }
 
 .proposal-tax-note {
