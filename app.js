@@ -3039,6 +3039,8 @@ function createScheduleItems(startDate = todayIso()) {
     subtrade: "",
     purchaseOrderId: "",
     addedBy,
+    flagged: false,
+    flagNote: "",
     targetDate: addDaysIso(startDate, item.offset),
     endDate: addDaysIso(startDate, item.offset),
     status: index === 0 ? "In progress" : "Not started",
@@ -3059,6 +3061,8 @@ function ensureSchedule() {
     if (item.subtrade === undefined) item.subtrade = "";
     if (item.purchaseOrderId === undefined) item.purchaseOrderId = "";
     if (!item.addedBy) item.addedBy = "Unknown";
+    if (item.flagged === undefined) item.flagged = false;
+    if (item.flagNote === undefined) item.flagNote = "";
     if (!item.endDate) item.endDate = item.targetDate || state.schedule.startDate;
     if (item.targetDate && item.endDate < item.targetDate) item.endDate = item.targetDate;
   });
@@ -3653,10 +3657,11 @@ function calendarEventHtml(item, segment = {}) {
     segment.startColumn && segment.endColumn ? `grid-column: ${segment.startColumn} / ${segment.endColumn}; --bar-row: ${segment.row || 1};` : "";
   const poLabel = item.purchaseOrderNumbers?.length ? ` - ${item.purchaseOrderNumbers.join(", ")}` : "";
   const label = `${item.projectName || "Project"}${item.name ? ` - ${item.name}` : ""}${poLabel}`;
+  const flagTitle = item.flagged && item.flagNote ? ` | Flag: ${item.flagNote}` : item.flagged ? " | Flagged for follow-up" : "";
   return `
-    <strong class="calendar-event ${segment.startColumn ? "calendar-bar" : ""} ${isRange ? "range-event" : ""} ${pendingClass} ${item.id === state.schedule.selectedItemId && item.isCurrentProject ? "active" : ""} ${item.isCurrentProject ? "" : "other-project"}" style="--event-color: ${projectColor(item.projectId)}; ${gridStyle}" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}" title="${escapeAttr(label)}">
+    <strong class="calendar-event ${segment.startColumn ? "calendar-bar" : ""} ${isRange ? "range-event" : ""} ${item.flagged ? "flagged-event" : ""} ${pendingClass} ${item.id === state.schedule.selectedItemId && item.isCurrentProject ? "active" : ""} ${item.isCurrentProject ? "" : "other-project"}" style="--event-color: ${projectColor(item.projectId)}; ${gridStyle}" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}" title="${escapeAttr(label + flagTitle)}">
       <button class="event-resize-handle event-resize-start" type="button" data-schedule-resize="start" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}" title="Drag or click, then choose a date"></button>
-      <span>${escapeAttr(label)}</span>
+      <span>${item.flagged ? `<b class="schedule-flag-badge">FLAG</b>` : ""}${escapeAttr(label)}</span>
       <button class="event-resize-handle event-resize-end" type="button" data-schedule-resize="end" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}" title="Drag or click, then choose a date"></button>
     </strong>
   `;
@@ -3768,8 +3773,8 @@ function renderSchedule() {
   els.scheduleBody.innerHTML = state.schedule.items
     .map(
       (item) => `
-        <tr data-schedule-item="${item.id}">
-          <td><input data-schedule-field="name" value="${escapeAttr(item.name)}" /></td>
+        <tr class="${item.flagged ? "flagged-schedule-row" : ""}" data-schedule-item="${item.id}">
+          <td>${item.flagged ? `<span class="schedule-flag-badge">FLAG</span>` : ""}<input data-schedule-field="name" value="${escapeAttr(item.name)}" /></td>
           <td>
             <select data-schedule-field="department">
               ${["Sales", "Office", "Production", "Owners", "Accounting"]
@@ -3841,6 +3846,8 @@ function renderSchedule() {
     els.scheduleEditDate.value = selected.targetDate || "";
     els.scheduleEditEndDate.value = selected.endDate || selected.targetDate || "";
     els.scheduleEditStatus.value = selected.status || "Not started";
+    els.scheduleEditFlagged.checked = Boolean(selected.flagged);
+    els.scheduleEditFlagNote.value = selected.flagNote || "";
     els.scheduleEditNotes.value = selected.notes || "";
   }
   els.scheduleEditor.classList.toggle("is-open", Boolean(state.schedule.editorOpen && selected));
@@ -3856,7 +3863,7 @@ function renderSchedule() {
         <button class="day-event-row" type="button" style="--event-color: ${projectColor(item.projectId)}" data-schedule-event="${item.id}" data-schedule-project="${escapeAttr(item.projectId)}">
           <strong>${escapeAttr(item.name)}</strong>
           <span>${escapeAttr(item.projectName)} - ${escapeAttr(item.status)}</span>
-          <small>${escapeAttr(item.trade || item.department || "Schedule")}${item.subtrade ? ` / ${escapeAttr(item.subtrade)}` : ""}${item.purchaseOrderNumbers?.length ? ` / ${escapeAttr(item.purchaseOrderNumbers.join(", "))}` : ""}</small>
+          <small>${item.flagged ? "FLAG / " : ""}${escapeAttr(item.trade || item.department || "Schedule")}${item.subtrade ? ` / ${escapeAttr(item.subtrade)}` : ""}${item.purchaseOrderNumbers?.length ? ` / ${escapeAttr(item.purchaseOrderNumbers.join(", "))}` : ""}</small>
         </button>
       `,
     )
@@ -3924,11 +3931,13 @@ function handleScheduleEditorEdit(event) {
     scheduleEditDate: "targetDate",
     scheduleEditEndDate: "endDate",
     scheduleEditStatus: "status",
+    scheduleEditFlagged: "flagged",
+    scheduleEditFlagNote: "flagNote",
     scheduleEditNotes: "notes",
   };
   const field = fieldMap[event.target.id];
   if (!field) return;
-  selected[field] = event.target.value;
+  selected[field] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
   if (field === "trade") {
     selected.subtrade = "";
     els.scheduleEditSubtrade.innerHTML = scheduleSubtradeOptionsHtml("", selected.trade || selected.department);
@@ -3988,6 +3997,8 @@ function createScheduleItemOnDate(dateText) {
     subtrade: filter.type === "company" ? filter.company : "",
     purchaseOrderId: "",
     addedBy: scheduleAddedByName(),
+    flagged: false,
+    flagNote: "",
     targetDate: dateText,
     endDate: dateText,
     status: "Not started",
@@ -5405,6 +5416,8 @@ function normalizeSchedule(schedule) {
     subtrade: item.subtrade || "",
     purchaseOrderId: item.purchaseOrderId || "",
     addedBy: item.addedBy || "Unknown",
+    flagged: Boolean(item.flagged),
+    flagNote: item.flagNote || "",
     targetDate: item.targetDate || normalized.startDate,
     endDate: item.endDate || item.targetDate || normalized.startDate,
     status: item.status || "Not started",
@@ -6844,6 +6857,8 @@ async function init() {
     "scheduleEditDate",
     "scheduleEditEndDate",
     "scheduleEditStatus",
+    "scheduleEditFlagged",
+    "scheduleEditFlagNote",
     "scheduleEditNotes",
     "addScheduleItemBtn",
     "deleteScheduleItemBtn",
@@ -7070,6 +7085,8 @@ async function init() {
         els.scheduleEditDate,
         els.scheduleEditEndDate,
         els.scheduleEditStatus,
+        els.scheduleEditFlagged,
+        els.scheduleEditFlagNote,
         els.scheduleEditNotes,
       ].includes(event.target)
     ) {
@@ -7186,6 +7203,8 @@ async function init() {
         els.scheduleEditDate,
         els.scheduleEditEndDate,
         els.scheduleEditStatus,
+        els.scheduleEditFlagged,
+        els.scheduleEditFlagNote,
         els.scheduleEditNotes,
       ].includes(event.target)
     ) {
