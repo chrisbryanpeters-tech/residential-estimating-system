@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Barndominium Budget Calculator | Zak's Homes & Cottages</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="budget-page">
+    <main class="budget-calculator-shell">
+      <header class="budget-header">
+        <a class="budget-brand" href="./index.html" aria-label="Zak's Homes & Cottages">
+          <img src="./assets/zaks-homes-cottages-logo.jpg" alt="Zak's Homes & Cottages" />
+        </a>
+        <div>
+          <p class="budget-kicker">Planning tool</p>
+          <h1>Barndominium Budget Calculator</h1>
+          <p>
+            Get an early budget range for a shouse or barndominium by entering the home size,
+            shop size, finish level, and site assumptions.
+          </p>
+        </div>
+      </header>
+
+      <section class="budget-calculator" aria-label="Barndominium budget calculator">
+        <form class="budget-form" id="barndoBudgetForm">
+          <div class="budget-form-section">
+            <h2>Building Size</h2>
+            <div class="budget-field-grid">
+              <label>
+                Living area sq ft
+                <input id="barndoLivingSqft" type="number" min="0" value="1600" />
+              </label>
+              <label>
+                Shop / garage sq ft
+                <input id="barndoShopSqft" type="number" min="0" value="1200" />
+              </label>
+              <label>
+                Covered porch sq ft
+                <input id="barndoPorchSqft" type="number" min="0" value="200" />
+              </label>
+            </div>
+          </div>
+
+          <div class="budget-form-section">
+            <h2>Finish Level</h2>
+            <div class="budget-field-grid">
+              <label>
+                Home finish
+                <select id="barndoHomeFinish">
+                  <option value="starter">Starter</option>
+                  <option value="standard" selected>Standard</option>
+                  <option value="enhanced">Enhanced</option>
+                  <option value="executive">Executive</option>
+                </select>
+              </label>
+              <label>
+                Shop finish
+                <select id="barndoShopFinish">
+                  <option value="shell">Cold storage shell</option>
+                  <option value="insulated" selected>Insulated / lined</option>
+                  <option value="finished">Finished shop</option>
+                </select>
+              </label>
+              <label>
+                Building complexity
+                <select id="barndoComplexity">
+                  <option value="simple">Simple rectangle</option>
+                  <option value="standard" selected>Typical layout</option>
+                  <option value="custom">Custom rooflines / features</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="budget-form-section">
+            <h2>Site Assumptions</h2>
+            <div class="budget-field-grid">
+              <label>
+                Foundation / slab
+                <select id="barndoFoundation">
+                  <option value="slab" selected>Engineered slab</option>
+                  <option value="crawlspace">Crawlspace / grade beam</option>
+                  <option value="basement">Basement under living area</option>
+                </select>
+              </label>
+              <label>
+                Site servicing
+                <select id="barndoServicing">
+                  <option value="minimal">Services nearby</option>
+                  <option value="typical" selected>Typical acreage services</option>
+                  <option value="extended">Long runs / more site work</option>
+                </select>
+              </label>
+              <label>
+                Contingency
+                <select id="barndoContingency">
+                  <option value="0.07">7%</option>
+                  <option value="0.10" selected>10%</option>
+                  <option value="0.15">15%</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </form>
+
+        <aside class="budget-results" aria-live="polite">
+          <div class="budget-range">
+            <span>Estimated budget range</span>
+            <strong id="barndoBudgetRange">$0 - $0</strong>
+          </div>
+          <dl class="budget-breakdown">
+            <div><dt>Home shell</dt><dd id="barndoHomeShell">$0</dd></div>
+            <div><dt>Home interior finish</dt><dd id="barndoHomeInterior">$0</dd></div>
+            <div><dt>Shop / garage</dt><dd id="barndoShopTotal">$0</dd></div>
+            <div><dt>Porch / exterior extras</dt><dd id="barndoPorchTotal">$0</dd></div>
+            <div><dt>Foundation & site</dt><dd id="barndoSiteTotal">$0</dd></div>
+            <div><dt>Contingency</dt><dd id="barndoContingencyTotal">$0</dd></div>
+          </dl>
+          <div class="budget-metrics">
+            <article>
+              <span>Budget per sq ft</span>
+              <strong id="barndoPriceSqft">$0</strong>
+            </article>
+            <article>
+              <span>Estimated deposit planning</span>
+              <strong id="barndoDeposit">$0</strong>
+            </article>
+          </div>
+          <p class="budget-note">
+            This is a planning range only. Final pricing depends on drawings, engineering,
+            site conditions, selections, utility runs, permits, taxes, and current supplier pricing.
+          </p>
+          <a class="budget-cta" href="mailto:info@zakshc.com?subject=Barndominium%20budget%20estimate">
+            Request a detailed estimate
+          </a>
+        </aside>
+      </section>
+    </main>
+
+    <script>
+      const budgetMoney = new Intl.NumberFormat("en-CA", {
+        style: "currency",
+        currency: "CAD",
+        maximumFractionDigits: 0,
+      });
+
+      const budgetRates = {
+        homeShell: 150,
+        homeFinish: {
+          starter: 75,
+          standard: 95,
+          enhanced: 125,
+          executive: 160,
+        },
+        shopShell: 100,
+        shopFinish: {
+          shell: 0,
+          insulated: 30,
+          finished: 55,
+        },
+        porch: 60,
+        foundation: {
+          slab: { living: 45, shop: 18, fixed: 18000 },
+          crawlspace: { living: 72, shop: 18, fixed: 24000 },
+          basement: { living: 115, shop: 18, fixed: 32000 },
+        },
+        servicing: {
+          minimal: 35000,
+          typical: 65000,
+          extended: 105000,
+        },
+        complexity: {
+          simple: 0.95,
+          standard: 1,
+          custom: 1.12,
+        },
+      };
+
+      const budgetIds = [
+        "barndoLivingSqft",
+        "barndoShopSqft",
+        "barndoPorchSqft",
+        "barndoHomeFinish",
+        "barndoShopFinish",
+        "barndoComplexity",
+        "barndoFoundation",
+        "barndoServicing",
+        "barndoContingency",
+      ];
+
+      const budgetEls = Object.fromEntries(
+        [
+          ...budgetIds,
+          "barndoBudgetRange",
+          "barndoHomeShell",
+          "barndoHomeInterior",
+          "barndoShopTotal",
+          "barndoPorchTotal",
+          "barndoSiteTotal",
+          "barndoContingencyTotal",
+          "barndoPriceSqft",
+          "barndoDeposit",
+        ].map((id) => [id, document.getElementById(id)]),
+      );
+
+      function budgetNum(value) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+      }
+
+      function calculateBarndoBudget() {
+        const livingSqft = budgetNum(budgetEls.barndoLivingSqft.value);
+        const shopSqft = budgetNum(budgetEls.barndoShopSqft.value);
+        const porchSqft = budgetNum(budgetEls.barndoPorchSqft.value);
+        const complexity = budgetRates.complexity[budgetEls.barndoComplexity.value] || 1;
+        const foundation = budgetRates.foundation[budgetEls.barndoFoundation.value] || budgetRates.foundation.slab;
+
+        const homeShell = livingSqft * budgetRates.homeShell * complexity;
+        const homeInterior = livingSqft * budgetRates.homeFinish[budgetEls.barndoHomeFinish.value] * complexity;
+        const shopTotal = shopSqft * (budgetRates.shopShell + budgetRates.shopFinish[budgetEls.barndoShopFinish.value]) * complexity;
+        const porchTotal = porchSqft * budgetRates.porch;
+        const siteTotal =
+          livingSqft * foundation.living +
+          shopSqft * foundation.shop +
+          foundation.fixed +
+          budgetRates.servicing[budgetEls.barndoServicing.value];
+        const subtotal = homeShell + homeInterior + shopTotal + porchTotal + siteTotal;
+        const contingency = subtotal * Number(budgetEls.barndoContingency.value);
+        const total = subtotal + contingency;
+        const low = total * 0.9;
+        const high = total * 1.15;
+        const totalSqft = livingSqft + shopSqft;
+
+        budgetEls.barndoBudgetRange.textContent = `${budgetMoney.format(low)} - ${budgetMoney.format(high)}`;
+        budgetEls.barndoHomeShell.textContent = budgetMoney.format(homeShell);
+        budgetEls.barndoHomeInterior.textContent = budgetMoney.format(homeInterior);
+        budgetEls.barndoShopTotal.textContent = budgetMoney.format(shopTotal);
+        budgetEls.barndoPorchTotal.textContent = budgetMoney.format(porchTotal);
+        budgetEls.barndoSiteTotal.textContent = budgetMoney.format(siteTotal);
+        budgetEls.barndoContingencyTotal.textContent = budgetMoney.format(contingency);
+        budgetEls.barndoPriceSqft.textContent = totalSqft ? `${budgetMoney.format(total / totalSqft)} / sq ft` : "$0 / sq ft";
+        budgetEls.barndoDeposit.textContent = budgetMoney.format(total * 0.1);
+      }
+
+      budgetIds.forEach((id) => {
+        budgetEls[id].addEventListener("input", calculateBarndoBudget);
+        budgetEls[id].addEventListener("change", calculateBarndoBudget);
+      });
+
+      calculateBarndoBudget();
+    </script>
+  </body>
+</html>
