@@ -1890,6 +1890,8 @@ label {
 .lane-items {
   max-height: 310px;
   overflow-y: auto;
+  margin-top: 4px;
+  padding-top: 4px;
   padding-right: 3px;
 }
 

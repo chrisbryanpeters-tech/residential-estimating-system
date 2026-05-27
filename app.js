@@ -2034,6 +2034,10 @@ function loggedInSalespersonName() {
   return currentUserProfile()?.name || els.crmSalesperson?.value || "";
 }
 
+function scheduleAddedByName() {
+  return currentUserProfile()?.name || "Unknown";
+}
+
 function openEstimateVersion(versionId) {
   if (!state.estimateVersions?.some((version) => version.id === versionId)) return;
   state.openEstimateVersionId = versionId;
@@ -3026,6 +3030,7 @@ function handleSelectionEdit(event) {
 }
 
 function createScheduleItems(startDate = todayIso()) {
+  const addedBy = scheduleAddedByName();
   return scheduleTemplate.map((item, index) => ({
     id: `schedule-${index + 1}`,
     name: item.name,
@@ -3033,6 +3038,7 @@ function createScheduleItems(startDate = todayIso()) {
     trade: item.trade || item.department,
     subtrade: "",
     purchaseOrderId: "",
+    addedBy,
     targetDate: addDaysIso(startDate, item.offset),
     endDate: addDaysIso(startDate, item.offset),
     status: index === 0 ? "In progress" : "Not started",
@@ -3052,6 +3058,7 @@ function ensureSchedule() {
     if (!item.trade) item.trade = item.department || "Production";
     if (item.subtrade === undefined) item.subtrade = "";
     if (item.purchaseOrderId === undefined) item.purchaseOrderId = "";
+    if (!item.addedBy) item.addedBy = "Unknown";
     if (!item.endDate) item.endDate = item.targetDate || state.schedule.startDate;
     if (item.targetDate && item.endDate < item.targetDate) item.endDate = item.targetDate;
   });
@@ -3830,6 +3837,7 @@ function renderSchedule() {
     els.scheduleEditSubtrade.value = selected.subtrade || "";
     els.scheduleEditPurchaseOrder.innerHTML = schedulePurchaseOrderOptionsHtml(selected);
     els.scheduleEditPurchaseOrder.value = selected.purchaseOrderId || "";
+    els.scheduleEditAddedBy.value = selected.addedBy || "Unknown";
     els.scheduleEditDate.value = selected.targetDate || "";
     els.scheduleEditEndDate.value = selected.endDate || selected.targetDate || "";
     els.scheduleEditStatus.value = selected.status || "Not started";
@@ -3979,6 +3987,7 @@ function createScheduleItemOnDate(dateText) {
     trade: filter.type === "trade" || filter.type === "company" ? filter.trade : "Framing",
     subtrade: filter.type === "company" ? filter.company : "",
     purchaseOrderId: "",
+    addedBy: scheduleAddedByName(),
     targetDate: dateText,
     endDate: dateText,
     status: "Not started",
@@ -5395,6 +5404,7 @@ function normalizeSchedule(schedule) {
     trade: item.trade || item.department || "Production",
     subtrade: item.subtrade || "",
     purchaseOrderId: item.purchaseOrderId || "",
+    addedBy: item.addedBy || "Unknown",
     targetDate: item.targetDate || normalized.startDate,
     endDate: item.endDate || item.targetDate || normalized.startDate,
     status: item.status || "Not started",
@@ -6830,6 +6840,7 @@ async function init() {
     "scheduleEditTrade",
     "scheduleEditSubtrade",
     "scheduleEditPurchaseOrder",
+    "scheduleEditAddedBy",
     "scheduleEditDate",
     "scheduleEditEndDate",
     "scheduleEditStatus",
