@@ -123,21 +123,9 @@
 
         <aside class="budget-results" aria-live="polite">
           <div class="budget-range">
-            <span>Estimated retail incl. tax</span>
+            <span>Estimated retail</span>
             <strong id="barndoRetailAfterTax">$0</strong>
           </div>
-          <dl class="budget-breakdown">
-            <div><dt>Home shell</dt><dd id="barndoHomeShell">$0</dd></div>
-            <div><dt>Home finish</dt><dd id="barndoHomeFinishTotal">$0</dd></div>
-            <div><dt>Shop shell</dt><dd id="barndoShopShell">$0</dd></div>
-            <div><dt>Shop finish</dt><dd id="barndoShopFinishTotal">$0</dd></div>
-            <div><dt>Porch</dt><dd id="barndoPorchTotal">$0</dd></div>
-            <div><dt>Foundation</dt><dd id="barndoFoundationTotal">$0</dd></div>
-            <div><dt>Upgrades</dt><dd id="barndoUpgradeTotal">$0</dd></div>
-            <div><dt>Openings</dt><dd id="barndoOpeningsTotal">$0</dd></div>
-            <div><dt>Site / travel</dt><dd id="barndoAllowanceTotal">$0</dd></div>
-            <div><dt>Project costs</dt><dd id="barndoFeesTotal">$0</dd></div>
-          </dl>
           <div class="budget-metrics">
             <article>
               <span>Budget / home sq ft</span>
@@ -245,16 +233,6 @@
         [
           ...budgetIds,
           "barndoRetailAfterTax",
-          "barndoHomeShell",
-          "barndoHomeFinishTotal",
-          "barndoShopShell",
-          "barndoShopFinishTotal",
-          "barndoPorchTotal",
-          "barndoFoundationTotal",
-          "barndoUpgradeTotal",
-          "barndoOpeningsTotal",
-          "barndoAllowanceTotal",
-          "barndoFeesTotal",
           "barndoCostHomeSqft",
           "barndoRetailCoveredSqft",
         ].map((id) => [id, document.getElementById(id)]),
@@ -320,16 +298,6 @@
         const retailAfterTax = retailBeforeTax + taxTotal;
 
         budgetEls.barndoRetailAfterTax.textContent = budgetMoney.format(retailAfterTax);
-        budgetEls.barndoHomeShell.textContent = budgetMoney.format(homeShell);
-        budgetEls.barndoHomeFinishTotal.textContent = budgetMoney.format(homeFinish);
-        budgetEls.barndoShopShell.textContent = budgetMoney.format(shopShell);
-        budgetEls.barndoShopFinishTotal.textContent = budgetMoney.format(shopFinish);
-        budgetEls.barndoPorchTotal.textContent = budgetMoney.format(porchTotal);
-        budgetEls.barndoFoundationTotal.textContent = budgetMoney.format(foundationTotal);
-        budgetEls.barndoUpgradeTotal.textContent = budgetMoney.format(upgradeTotal);
-        budgetEls.barndoOpeningsTotal.textContent = budgetMoney.format(openingsTotal);
-        budgetEls.barndoAllowanceTotal.textContent = budgetMoney.format(travelTotal + utilityTotal + septicTotal + contingency);
-        budgetEls.barndoFeesTotal.textContent = budgetMoney.format(engineeringAdmin + projectManagement);
         budgetEls.barndoCostHomeSqft.textContent = livingSqft ? `${budgetMoney.format(retailAfterTax / livingSqft)} / sq ft` : "$0 / sq ft";
         budgetEls.barndoRetailCoveredSqft.textContent = totalCoveredSqft ? `${budgetMoney.format(retailAfterTax / totalCoveredSqft)} / sq ft` : "$0 / sq ft";
       }

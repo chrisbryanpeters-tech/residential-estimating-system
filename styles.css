@@ -201,17 +201,17 @@ label {
   top: 18px;
   display: grid;
   align-self: stretch;
-  align-content: start;
+  align-content: center;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 9px;
-  padding: 12px;
+  gap: 12px;
+  padding: 18px;
 }
 
 .budget-range {
   display: grid;
-  gap: 4px;
+  gap: 8px;
   grid-column: 1 / -1;
-  padding: 12px;
+  padding: 18px;
   border-radius: 8px;
   background: #123f3d;
   color: #ffffff;
@@ -226,7 +226,7 @@ label {
 }
 
 .budget-range strong {
-  font-size: 23px;
+  font-size: 34px;
   line-height: 1.1;
 }
 
