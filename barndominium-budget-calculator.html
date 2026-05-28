@@ -25,7 +25,7 @@
       <section class="budget-calculator" aria-label="Barndominium budget calculator">
         <form class="budget-form" id="barndoBudgetForm">
           <div class="budget-form-section">
-            <h2>Building Size</h2>
+            <h2>Building Info</h2>
             <div class="budget-field-grid">
               <label>
                 Living area sq ft
@@ -38,6 +38,10 @@
               <label>
                 Covered porch sq ft
                 <input id="barndoPorchSqft" type="number" min="0" value="365" />
+              </label>
+              <label>
+                One-way distance km
+                <input id="barndoDistanceKm" type="number" min="0" value="250" />
               </label>
             </div>
           </div>
@@ -112,16 +116,6 @@
               <label>
                 Windows
                 <input id="barndoWindowQty" type="number" min="0" value="25" />
-              </label>
-            </div>
-          </div>
-
-          <div class="budget-form-section">
-            <h2>Site & Location</h2>
-            <div class="budget-field-grid">
-              <label>
-                One-way distance km
-                <input id="barndoDistanceKm" type="number" min="0" value="250" />
               </label>
             </div>
           </div>
