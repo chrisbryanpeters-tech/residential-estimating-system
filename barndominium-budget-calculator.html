@@ -106,10 +106,6 @@
                 <input id="barndoOhDoorQty" type="number" min="0" value="3" />
               </label>
               <label>
-                OH door width ft
-                <input id="barndoOhDoorWidth" type="number" min="0" value="16" />
-              </label>
-              <label>
                 Man doors
                 <input id="barndoManDoorQty" type="number" min="0" value="3" />
               </label>
@@ -126,10 +122,6 @@
               <label>
                 One-way distance km
                 <input id="barndoDistanceKm" type="number" min="0" value="250" />
-              </label>
-              <label>
-                Septic / water
-                <input id="barndoSepticAllowance" type="number" min="0" value="0" />
               </label>
             </div>
           </div>
@@ -228,9 +220,11 @@
       };
 
       const budgetDefaults = {
+        overheadDoorWidth: 16,
         overheadDoorHeight: 10,
         windowSqft: 16,
         interiorDoorQty: 16,
+        septicAllowance: 0,
         utilityAllowance: 25000,
         contingencyRate: 0.03,
         marginRate: 0.18,
@@ -248,11 +242,9 @@
         "barndoFoundation",
         "barndoInsulation",
         "barndoOhDoorQty",
-        "barndoOhDoorWidth",
         "barndoManDoorQty",
         "barndoWindowQty",
         "barndoDistanceKm",
-        "barndoSepticAllowance",
       ];
 
       const budgetEls = Object.fromEntries(
@@ -300,7 +292,7 @@
         const upgradeTotal = exteriorUpgrade + roofUpgrade + insulationUpgrade;
         const overheadDoorArea =
           budgetNum(budgetEls.barndoOhDoorQty.value) *
-          budgetNum(budgetEls.barndoOhDoorWidth.value) *
+          budgetDefaults.overheadDoorWidth *
           budgetDefaults.overheadDoorHeight;
         const windowArea = budgetNum(budgetEls.barndoWindowQty.value) * budgetDefaults.windowSqft;
         const openingsTotal =
@@ -310,7 +302,7 @@
           budgetDefaults.interiorDoorQty * budgetRates.openings.interiorDoorEach;
         const travelTotal = budgetNum(budgetEls.barndoDistanceKm.value) * budgetRates.mobilizationKm;
         const utilityTotal = budgetDefaults.utilityAllowance;
-        const septicTotal = budgetNum(budgetEls.barndoSepticAllowance.value);
+        const septicTotal = budgetDefaults.septicAllowance;
         const subtotalBeforeContingency =
           homeShell +
           homeFinish +

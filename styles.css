@@ -158,8 +158,8 @@ label {
 
 .budget-calculator {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 430px;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 410px;
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -177,7 +177,7 @@ label {
 }
 
 .budget-form-section {
-  padding: 14px;
+  padding: 12px;
   border-bottom: 1px solid #e5ebed;
 }
 
@@ -186,14 +186,14 @@ label {
 }
 
 .budget-form-section h2 {
-  margin: 0 0 10px;
-  font-size: 15px;
+  margin: 0 0 8px;
+  font-size: 14px;
 }
 
 .budget-field-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .budget-results {
