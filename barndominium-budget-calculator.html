@@ -110,10 +110,6 @@
                 <input id="barndoOhDoorWidth" type="number" min="0" value="16" />
               </label>
               <label>
-                OH door height ft
-                <input id="barndoOhDoorHeight" type="number" min="0" value="10" />
-              </label>
-              <label>
                 Man doors
                 <input id="barndoManDoorQty" type="number" min="0" value="3" />
               </label>
@@ -121,43 +117,19 @@
                 Windows
                 <input id="barndoWindowQty" type="number" min="0" value="25" />
               </label>
-              <label>
-                Window size sq ft
-                <input id="barndoWindowSqft" type="number" min="0" value="16" />
-              </label>
-              <label>
-                Interior doors
-                <input id="barndoInteriorDoorQty" type="number" min="0" value="16" />
-              </label>
             </div>
           </div>
 
           <div class="budget-form-section">
-            <h2>Site & Markup</h2>
+            <h2>Site & Location</h2>
             <div class="budget-field-grid">
               <label>
                 One-way distance km
                 <input id="barndoDistanceKm" type="number" min="0" value="250" />
               </label>
               <label>
-                Utility rough-in
-                <input id="barndoUtilityAllowance" type="number" min="0" value="25000" />
-              </label>
-              <label>
                 Septic / water
                 <input id="barndoSepticAllowance" type="number" min="0" value="0" />
-              </label>
-              <label>
-                Contingency %
-                <input id="barndoContingencyRate" type="number" min="0" step="0.1" value="3" />
-              </label>
-              <label>
-                Target margin %
-                <input id="barndoMarginRate" type="number" min="0" max="80" step="0.1" value="18" />
-              </label>
-              <label>
-                Sales tax %
-                <input id="barndoTaxRate" type="number" min="0" step="0.1" value="11" />
               </label>
             </div>
           </div>
@@ -177,24 +149,16 @@
             <div><dt>Foundation</dt><dd id="barndoFoundationTotal">$0</dd></div>
             <div><dt>Upgrades</dt><dd id="barndoUpgradeTotal">$0</dd></div>
             <div><dt>Openings</dt><dd id="barndoOpeningsTotal">$0</dd></div>
-            <div><dt>Site / allowances</dt><dd id="barndoAllowanceTotal">$0</dd></div>
-            <div><dt>Fees</dt><dd id="barndoFeesTotal">$0</dd></div>
+            <div><dt>Site / travel</dt><dd id="barndoAllowanceTotal">$0</dd></div>
+            <div><dt>Project costs</dt><dd id="barndoFeesTotal">$0</dd></div>
           </dl>
           <div class="budget-metrics">
             <article>
-              <span>Retail before tax</span>
-              <strong id="barndoRetailBeforeTax">$0</strong>
-            </article>
-            <article>
-              <span>Sales tax</span>
-              <strong id="barndoTaxTotal">$0</strong>
-            </article>
-            <article>
-              <span>Cost / home sq ft</span>
+              <span>Budget / home sq ft</span>
               <strong id="barndoCostHomeSqft">$0</strong>
             </article>
             <article>
-              <span>Retail / covered sq ft</span>
+              <span>Budget / covered sq ft</span>
               <strong id="barndoRetailCoveredSqft">$0</strong>
             </article>
           </div>
@@ -263,6 +227,16 @@
         projectManagementRate: 0.02,
       };
 
+      const budgetDefaults = {
+        overheadDoorHeight: 10,
+        windowSqft: 16,
+        interiorDoorQty: 16,
+        utilityAllowance: 25000,
+        contingencyRate: 0.03,
+        marginRate: 0.18,
+        taxRate: 0.11,
+      };
+
       const budgetIds = [
         "barndoLivingSqft",
         "barndoShopSqft",
@@ -275,17 +249,10 @@
         "barndoInsulation",
         "barndoOhDoorQty",
         "barndoOhDoorWidth",
-        "barndoOhDoorHeight",
         "barndoManDoorQty",
         "barndoWindowQty",
-        "barndoWindowSqft",
-        "barndoInteriorDoorQty",
         "barndoDistanceKm",
-        "barndoUtilityAllowance",
         "barndoSepticAllowance",
-        "barndoContingencyRate",
-        "barndoMarginRate",
-        "barndoTaxRate",
       ];
 
       const budgetEls = Object.fromEntries(
@@ -302,8 +269,6 @@
           "barndoOpeningsTotal",
           "barndoAllowanceTotal",
           "barndoFeesTotal",
-          "barndoRetailBeforeTax",
-          "barndoTaxTotal",
           "barndoCostHomeSqft",
           "barndoRetailCoveredSqft",
         ].map((id) => [id, document.getElementById(id)]),
@@ -336,15 +301,15 @@
         const overheadDoorArea =
           budgetNum(budgetEls.barndoOhDoorQty.value) *
           budgetNum(budgetEls.barndoOhDoorWidth.value) *
-          budgetNum(budgetEls.barndoOhDoorHeight.value);
-        const windowArea = budgetNum(budgetEls.barndoWindowQty.value) * budgetNum(budgetEls.barndoWindowSqft.value);
+          budgetDefaults.overheadDoorHeight;
+        const windowArea = budgetNum(budgetEls.barndoWindowQty.value) * budgetDefaults.windowSqft;
         const openingsTotal =
           overheadDoorArea * budgetRates.openings.overheadDoorSqft +
           budgetNum(budgetEls.barndoManDoorQty.value) * budgetRates.openings.manDoorEach +
           windowArea * budgetRates.openings.windowSqft +
-          budgetNum(budgetEls.barndoInteriorDoorQty.value) * budgetRates.openings.interiorDoorEach;
+          budgetDefaults.interiorDoorQty * budgetRates.openings.interiorDoorEach;
         const travelTotal = budgetNum(budgetEls.barndoDistanceKm.value) * budgetRates.mobilizationKm;
-        const utilityTotal = budgetNum(budgetEls.barndoUtilityAllowance.value);
+        const utilityTotal = budgetDefaults.utilityAllowance;
         const septicTotal = budgetNum(budgetEls.barndoSepticAllowance.value);
         const subtotalBeforeContingency =
           homeShell +
@@ -358,14 +323,14 @@
           travelTotal +
           utilityTotal +
           septicTotal;
-        const contingency = subtotalBeforeContingency * (budgetNum(budgetEls.barndoContingencyRate.value) / 100);
+        const contingency = subtotalBeforeContingency * budgetDefaults.contingencyRate;
         const hardCostSubtotal = subtotalBeforeContingency + contingency;
         const engineeringAdmin = hardCostSubtotal * budgetRates.engineeringAdminRate;
         const projectManagement = hardCostSubtotal * budgetRates.projectManagementRate;
         const totalCostBeforeMargin = hardCostSubtotal + engineeringAdmin + projectManagement;
-        const marginRate = Math.min(budgetNum(budgetEls.barndoMarginRate.value) / 100, 0.8);
+        const marginRate = budgetDefaults.marginRate;
         const retailBeforeTax = marginRate >= 1 ? 0 : totalCostBeforeMargin / (1 - marginRate);
-        const taxTotal = retailBeforeTax * (budgetNum(budgetEls.barndoTaxRate.value) / 100);
+        const taxTotal = retailBeforeTax * budgetDefaults.taxRate;
         const retailAfterTax = retailBeforeTax + taxTotal;
 
         budgetEls.barndoRetailAfterTax.textContent = budgetMoney.format(retailAfterTax);
@@ -379,10 +344,8 @@
         budgetEls.barndoOpeningsTotal.textContent = budgetMoney.format(openingsTotal);
         budgetEls.barndoAllowanceTotal.textContent = budgetMoney.format(travelTotal + utilityTotal + septicTotal + contingency);
         budgetEls.barndoFeesTotal.textContent = budgetMoney.format(engineeringAdmin + projectManagement);
-        budgetEls.barndoRetailBeforeTax.textContent = budgetMoney.format(retailBeforeTax);
-        budgetEls.barndoTaxTotal.textContent = budgetMoney.format(taxTotal);
-        budgetEls.barndoCostHomeSqft.textContent = livingSqft ? `${budgetMoney.format(totalCostBeforeMargin / livingSqft)} / sq ft` : "$0 / sq ft";
-        budgetEls.barndoRetailCoveredSqft.textContent = totalCoveredSqft ? `${budgetMoney.format(retailBeforeTax / totalCoveredSqft)} / sq ft` : "$0 / sq ft";
+        budgetEls.barndoCostHomeSqft.textContent = livingSqft ? `${budgetMoney.format(retailAfterTax / livingSqft)} / sq ft` : "$0 / sq ft";
+        budgetEls.barndoRetailCoveredSqft.textContent = totalCoveredSqft ? `${budgetMoney.format(retailAfterTax / totalCoveredSqft)} / sq ft` : "$0 / sq ft";
       }
 
       budgetIds.forEach((id) => {
