@@ -88,6 +88,11 @@ label {
   color: var(--muted);
 }
 
+.budget-page label {
+  gap: 5px;
+  font-size: 11px;
+}
+
 .budget-page {
   background: #f3f5f5;
 }
@@ -196,6 +201,7 @@ label {
   top: 18px;
   display: grid;
   align-self: stretch;
+  align-content: start;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 9px;
   padding: 12px;

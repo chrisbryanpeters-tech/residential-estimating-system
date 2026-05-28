@@ -17,7 +17,7 @@
           <h1>Barndominium Budget Calculator</h1>
           <p>
             Get an early budget range for a shouse or barndominium by entering the home size,
-            shop size, finish level, and site assumptions.
+            shop size, finish levels, openings, and site assumptions.
           </p>
         </div>
       </header>
@@ -29,15 +29,15 @@
             <div class="budget-field-grid">
               <label>
                 Living area sq ft
-                <input id="barndoLivingSqft" type="number" min="0" value="1600" />
+                <input id="barndoLivingSqft" type="number" min="0" value="3000" />
               </label>
               <label>
                 Shop / garage sq ft
-                <input id="barndoShopSqft" type="number" min="0" value="1200" />
+                <input id="barndoShopSqft" type="number" min="0" value="3000" />
               </label>
               <label>
                 Covered porch sq ft
-                <input id="barndoPorchSqft" type="number" min="0" value="200" />
+                <input id="barndoPorchSqft" type="number" min="0" value="365" />
               </label>
             </div>
           </div>
@@ -48,57 +48,116 @@
               <label>
                 Home finish
                 <select id="barndoHomeFinish">
-                  <option value="starter">Starter</option>
-                  <option value="standard" selected>Standard</option>
-                  <option value="enhanced">Enhanced</option>
-                  <option value="executive">Executive</option>
+                  <option value="Basic">Basic</option>
+                  <option value="Mid" selected>Mid</option>
+                  <option value="High">High</option>
+                  <option value="Custom">Custom</option>
                 </select>
               </label>
               <label>
                 Shop finish
                 <select id="barndoShopFinish">
-                  <option value="shell">Cold storage shell</option>
-                  <option value="insulated" selected>Insulated / lined</option>
-                  <option value="finished">Finished shop</option>
+                  <option value="Basic">Basic</option>
+                  <option value="Insulated">Insulated</option>
+                  <option value="Finished" selected>Finished</option>
                 </select>
               </label>
               <label>
-                Building complexity
-                <select id="barndoComplexity">
-                  <option value="simple">Simple rectangle</option>
-                  <option value="standard" selected>Typical layout</option>
-                  <option value="custom">Custom rooflines / features</option>
+                Exterior finish
+                <select id="barndoExterior">
+                  <option value="Metal" selected>Metal</option>
+                  <option value="LP SmartSide">LP SmartSide</option>
+                  <option value="Hardie">Hardie</option>
+                  <option value="Stucco">Stucco</option>
+                </select>
+              </label>
+              <label>
+                Roof type
+                <select id="barndoRoof">
+                  <option value="Metal" selected>Metal</option>
+                  <option value="Asphalt">Asphalt</option>
+                  <option value="Premium Metal">Premium Metal</option>
+                </select>
+              </label>
+              <label>
+                Foundation type
+                <select id="barndoFoundation">
+                  <option value="Slab" selected>Slab</option>
+                  <option value="Crawlspace">Crawlspace</option>
+                  <option value="Basement">Basement</option>
+                </select>
+              </label>
+              <label>
+                Insulation
+                <select id="barndoInsulation">
+                  <option value="Standard" selected>Standard</option>
+                  <option value="Enhanced">Enhanced</option>
+                  <option value="Spray Foam">Spray Foam</option>
                 </select>
               </label>
             </div>
           </div>
 
           <div class="budget-form-section">
-            <h2>Site Assumptions</h2>
+            <h2>Openings</h2>
             <div class="budget-field-grid">
               <label>
-                Foundation / slab
-                <select id="barndoFoundation">
-                  <option value="slab" selected>Engineered slab</option>
-                  <option value="crawlspace">Crawlspace / grade beam</option>
-                  <option value="basement">Basement under living area</option>
-                </select>
+                Overhead doors
+                <input id="barndoOhDoorQty" type="number" min="0" value="3" />
               </label>
               <label>
-                Site servicing
-                <select id="barndoServicing">
-                  <option value="minimal">Services nearby</option>
-                  <option value="typical" selected>Typical acreage services</option>
-                  <option value="extended">Long runs / more site work</option>
-                </select>
+                OH door width ft
+                <input id="barndoOhDoorWidth" type="number" min="0" value="16" />
               </label>
               <label>
-                Contingency
-                <select id="barndoContingency">
-                  <option value="0.07">7%</option>
-                  <option value="0.10" selected>10%</option>
-                  <option value="0.15">15%</option>
-                </select>
+                OH door height ft
+                <input id="barndoOhDoorHeight" type="number" min="0" value="10" />
+              </label>
+              <label>
+                Man doors
+                <input id="barndoManDoorQty" type="number" min="0" value="3" />
+              </label>
+              <label>
+                Windows
+                <input id="barndoWindowQty" type="number" min="0" value="25" />
+              </label>
+              <label>
+                Window size sq ft
+                <input id="barndoWindowSqft" type="number" min="0" value="16" />
+              </label>
+              <label>
+                Interior doors
+                <input id="barndoInteriorDoorQty" type="number" min="0" value="16" />
+              </label>
+            </div>
+          </div>
+
+          <div class="budget-form-section">
+            <h2>Site & Markup</h2>
+            <div class="budget-field-grid">
+              <label>
+                One-way distance km
+                <input id="barndoDistanceKm" type="number" min="0" value="250" />
+              </label>
+              <label>
+                Utility rough-in
+                <input id="barndoUtilityAllowance" type="number" min="0" value="25000" />
+              </label>
+              <label>
+                Septic / water
+                <input id="barndoSepticAllowance" type="number" min="0" value="0" />
+              </label>
+              <label>
+                Contingency %
+                <input id="barndoContingencyRate" type="number" min="0" step="0.1" value="3" />
+              </label>
+              <label>
+                Target margin %
+                <input id="barndoMarginRate" type="number" min="0" max="80" step="0.1" value="18" />
+              </label>
+              <label>
+                Sales tax %
+                <input id="barndoTaxRate" type="number" min="0" step="0.1" value="11" />
               </label>
             </div>
           </div>
@@ -106,30 +165,42 @@
 
         <aside class="budget-results" aria-live="polite">
           <div class="budget-range">
-            <span>Estimated budget range</span>
-            <strong id="barndoBudgetRange">$0 - $0</strong>
+            <span>Estimated retail incl. tax</span>
+            <strong id="barndoRetailAfterTax">$0</strong>
           </div>
           <dl class="budget-breakdown">
             <div><dt>Home shell</dt><dd id="barndoHomeShell">$0</dd></div>
-            <div><dt>Home interior finish</dt><dd id="barndoHomeInterior">$0</dd></div>
-            <div><dt>Shop / garage</dt><dd id="barndoShopTotal">$0</dd></div>
-            <div><dt>Porch / exterior extras</dt><dd id="barndoPorchTotal">$0</dd></div>
-            <div><dt>Foundation & site</dt><dd id="barndoSiteTotal">$0</dd></div>
-            <div><dt>Contingency</dt><dd id="barndoContingencyTotal">$0</dd></div>
+            <div><dt>Home finish</dt><dd id="barndoHomeFinishTotal">$0</dd></div>
+            <div><dt>Shop shell</dt><dd id="barndoShopShell">$0</dd></div>
+            <div><dt>Shop finish</dt><dd id="barndoShopFinishTotal">$0</dd></div>
+            <div><dt>Porch</dt><dd id="barndoPorchTotal">$0</dd></div>
+            <div><dt>Foundation</dt><dd id="barndoFoundationTotal">$0</dd></div>
+            <div><dt>Upgrades</dt><dd id="barndoUpgradeTotal">$0</dd></div>
+            <div><dt>Openings</dt><dd id="barndoOpeningsTotal">$0</dd></div>
+            <div><dt>Site / allowances</dt><dd id="barndoAllowanceTotal">$0</dd></div>
+            <div><dt>Fees</dt><dd id="barndoFeesTotal">$0</dd></div>
           </dl>
           <div class="budget-metrics">
             <article>
-              <span>Budget per sq ft</span>
-              <strong id="barndoPriceSqft">$0</strong>
+              <span>Retail before tax</span>
+              <strong id="barndoRetailBeforeTax">$0</strong>
             </article>
             <article>
-              <span>Deposit planning</span>
-              <strong id="barndoDeposit">$0</strong>
+              <span>Sales tax</span>
+              <strong id="barndoTaxTotal">$0</strong>
+            </article>
+            <article>
+              <span>Cost / home sq ft</span>
+              <strong id="barndoCostHomeSqft">$0</strong>
+            </article>
+            <article>
+              <span>Retail / covered sq ft</span>
+              <strong id="barndoRetailCoveredSqft">$0</strong>
             </article>
           </div>
           <p class="budget-note">
-            Planning range only. Final pricing depends on drawings, site conditions,
-            selections, permits, taxes, and supplier pricing.
+            Uses the workbook rate table. Budget pricing only; final pricing depends on drawings,
+            site conditions, supplier pricing, selections, and confirmed scope.
           </p>
           <a class="budget-cta" href="mailto:info@zakshc.com?subject=Barndominium%20budget%20estimate">
             Request estimate
@@ -146,35 +217,50 @@
       });
 
       const budgetRates = {
-        homeShell: 150,
+        homeShell: 130,
         homeFinish: {
-          starter: 75,
-          standard: 95,
-          enhanced: 125,
-          executive: 160,
+          Basic: 65,
+          Mid: 95,
+          High: 135,
+          Custom: 175,
         },
-        shopShell: 100,
+        shopShell: 65,
         shopFinish: {
-          shell: 0,
-          insulated: 30,
-          finished: 55,
+          Basic: 15,
+          Insulated: 35,
+          Finished: 60,
         },
-        porch: 60,
+        porch: 85,
+        exterior: {
+          Metal: 0,
+          "LP SmartSide": 18,
+          Hardie: 26,
+          Stucco: 30,
+        },
+        roof: {
+          Metal: 0,
+          Asphalt: -3,
+          "Premium Metal": 9,
+        },
         foundation: {
-          slab: { living: 45, shop: 18, fixed: 18000 },
-          crawlspace: { living: 72, shop: 18, fixed: 24000 },
-          basement: { living: 115, shop: 18, fixed: 32000 },
+          Slab: 28,
+          Crawlspace: 55,
+          Basement: 95,
         },
-        servicing: {
-          minimal: 35000,
-          typical: 65000,
-          extended: 105000,
+        insulation: {
+          Standard: 0,
+          Enhanced: 9,
+          "Spray Foam": 18,
         },
-        complexity: {
-          simple: 0.95,
-          standard: 1,
-          custom: 1.12,
+        openings: {
+          overheadDoorSqft: 42,
+          manDoorEach: 750,
+          windowSqft: 75,
+          interiorDoorEach: 325,
         },
+        mobilizationKm: 150,
+        engineeringAdminRate: 0.015,
+        projectManagementRate: 0.02,
       };
 
       const budgetIds = [
@@ -183,24 +269,43 @@
         "barndoPorchSqft",
         "barndoHomeFinish",
         "barndoShopFinish",
-        "barndoComplexity",
+        "barndoExterior",
+        "barndoRoof",
         "barndoFoundation",
-        "barndoServicing",
-        "barndoContingency",
+        "barndoInsulation",
+        "barndoOhDoorQty",
+        "barndoOhDoorWidth",
+        "barndoOhDoorHeight",
+        "barndoManDoorQty",
+        "barndoWindowQty",
+        "barndoWindowSqft",
+        "barndoInteriorDoorQty",
+        "barndoDistanceKm",
+        "barndoUtilityAllowance",
+        "barndoSepticAllowance",
+        "barndoContingencyRate",
+        "barndoMarginRate",
+        "barndoTaxRate",
       ];
 
       const budgetEls = Object.fromEntries(
         [
           ...budgetIds,
-          "barndoBudgetRange",
+          "barndoRetailAfterTax",
           "barndoHomeShell",
-          "barndoHomeInterior",
-          "barndoShopTotal",
+          "barndoHomeFinishTotal",
+          "barndoShopShell",
+          "barndoShopFinishTotal",
           "barndoPorchTotal",
-          "barndoSiteTotal",
-          "barndoContingencyTotal",
-          "barndoPriceSqft",
-          "barndoDeposit",
+          "barndoFoundationTotal",
+          "barndoUpgradeTotal",
+          "barndoOpeningsTotal",
+          "barndoAllowanceTotal",
+          "barndoFeesTotal",
+          "barndoRetailBeforeTax",
+          "barndoTaxTotal",
+          "barndoCostHomeSqft",
+          "barndoRetailCoveredSqft",
         ].map((id) => [id, document.getElementById(id)]),
       );
 
@@ -213,34 +318,71 @@
         const livingSqft = budgetNum(budgetEls.barndoLivingSqft.value);
         const shopSqft = budgetNum(budgetEls.barndoShopSqft.value);
         const porchSqft = budgetNum(budgetEls.barndoPorchSqft.value);
-        const complexity = budgetRates.complexity[budgetEls.barndoComplexity.value] || 1;
-        const foundation = budgetRates.foundation[budgetEls.barndoFoundation.value] || budgetRates.foundation.slab;
+        const totalBuildingSqft = livingSqft + shopSqft;
+        const totalCoveredSqft = livingSqft + shopSqft + porchSqft;
+        const foundationRate = budgetRates.foundation[budgetEls.barndoFoundation.value] || 0;
+        const foundationQty = budgetEls.barndoFoundation.value === "Slab" ? totalBuildingSqft : livingSqft;
 
-        const homeShell = livingSqft * budgetRates.homeShell * complexity;
-        const homeInterior = livingSqft * budgetRates.homeFinish[budgetEls.barndoHomeFinish.value] * complexity;
-        const shopTotal = shopSqft * (budgetRates.shopShell + budgetRates.shopFinish[budgetEls.barndoShopFinish.value]) * complexity;
+        const homeShell = livingSqft * budgetRates.homeShell;
+        const homeFinish = livingSqft * budgetRates.homeFinish[budgetEls.barndoHomeFinish.value];
+        const shopShell = shopSqft * budgetRates.shopShell;
+        const shopFinish = shopSqft * budgetRates.shopFinish[budgetEls.barndoShopFinish.value];
         const porchTotal = porchSqft * budgetRates.porch;
-        const siteTotal =
-          livingSqft * foundation.living +
-          shopSqft * foundation.shop +
-          foundation.fixed +
-          budgetRates.servicing[budgetEls.barndoServicing.value];
-        const subtotal = homeShell + homeInterior + shopTotal + porchTotal + siteTotal;
-        const contingency = subtotal * Number(budgetEls.barndoContingency.value);
-        const total = subtotal + contingency;
-        const low = total * 0.9;
-        const high = total * 1.15;
-        const totalSqft = livingSqft + shopSqft;
+        const foundationTotal = foundationQty * foundationRate;
+        const exteriorUpgrade = totalBuildingSqft * budgetRates.exterior[budgetEls.barndoExterior.value];
+        const roofUpgrade = totalCoveredSqft * budgetRates.roof[budgetEls.barndoRoof.value];
+        const insulationUpgrade = totalBuildingSqft * budgetRates.insulation[budgetEls.barndoInsulation.value];
+        const upgradeTotal = exteriorUpgrade + roofUpgrade + insulationUpgrade;
+        const overheadDoorArea =
+          budgetNum(budgetEls.barndoOhDoorQty.value) *
+          budgetNum(budgetEls.barndoOhDoorWidth.value) *
+          budgetNum(budgetEls.barndoOhDoorHeight.value);
+        const windowArea = budgetNum(budgetEls.barndoWindowQty.value) * budgetNum(budgetEls.barndoWindowSqft.value);
+        const openingsTotal =
+          overheadDoorArea * budgetRates.openings.overheadDoorSqft +
+          budgetNum(budgetEls.barndoManDoorQty.value) * budgetRates.openings.manDoorEach +
+          windowArea * budgetRates.openings.windowSqft +
+          budgetNum(budgetEls.barndoInteriorDoorQty.value) * budgetRates.openings.interiorDoorEach;
+        const travelTotal = budgetNum(budgetEls.barndoDistanceKm.value) * budgetRates.mobilizationKm;
+        const utilityTotal = budgetNum(budgetEls.barndoUtilityAllowance.value);
+        const septicTotal = budgetNum(budgetEls.barndoSepticAllowance.value);
+        const subtotalBeforeContingency =
+          homeShell +
+          homeFinish +
+          shopShell +
+          shopFinish +
+          porchTotal +
+          foundationTotal +
+          upgradeTotal +
+          openingsTotal +
+          travelTotal +
+          utilityTotal +
+          septicTotal;
+        const contingency = subtotalBeforeContingency * (budgetNum(budgetEls.barndoContingencyRate.value) / 100);
+        const hardCostSubtotal = subtotalBeforeContingency + contingency;
+        const engineeringAdmin = hardCostSubtotal * budgetRates.engineeringAdminRate;
+        const projectManagement = hardCostSubtotal * budgetRates.projectManagementRate;
+        const totalCostBeforeMargin = hardCostSubtotal + engineeringAdmin + projectManagement;
+        const marginRate = Math.min(budgetNum(budgetEls.barndoMarginRate.value) / 100, 0.8);
+        const retailBeforeTax = marginRate >= 1 ? 0 : totalCostBeforeMargin / (1 - marginRate);
+        const taxTotal = retailBeforeTax * (budgetNum(budgetEls.barndoTaxRate.value) / 100);
+        const retailAfterTax = retailBeforeTax + taxTotal;
 
-        budgetEls.barndoBudgetRange.textContent = `${budgetMoney.format(low)} - ${budgetMoney.format(high)}`;
+        budgetEls.barndoRetailAfterTax.textContent = budgetMoney.format(retailAfterTax);
         budgetEls.barndoHomeShell.textContent = budgetMoney.format(homeShell);
-        budgetEls.barndoHomeInterior.textContent = budgetMoney.format(homeInterior);
-        budgetEls.barndoShopTotal.textContent = budgetMoney.format(shopTotal);
+        budgetEls.barndoHomeFinishTotal.textContent = budgetMoney.format(homeFinish);
+        budgetEls.barndoShopShell.textContent = budgetMoney.format(shopShell);
+        budgetEls.barndoShopFinishTotal.textContent = budgetMoney.format(shopFinish);
         budgetEls.barndoPorchTotal.textContent = budgetMoney.format(porchTotal);
-        budgetEls.barndoSiteTotal.textContent = budgetMoney.format(siteTotal);
-        budgetEls.barndoContingencyTotal.textContent = budgetMoney.format(contingency);
-        budgetEls.barndoPriceSqft.textContent = totalSqft ? `${budgetMoney.format(total / totalSqft)} / sq ft` : "$0 / sq ft";
-        budgetEls.barndoDeposit.textContent = budgetMoney.format(total * 0.1);
+        budgetEls.barndoFoundationTotal.textContent = budgetMoney.format(foundationTotal);
+        budgetEls.barndoUpgradeTotal.textContent = budgetMoney.format(upgradeTotal);
+        budgetEls.barndoOpeningsTotal.textContent = budgetMoney.format(openingsTotal);
+        budgetEls.barndoAllowanceTotal.textContent = budgetMoney.format(travelTotal + utilityTotal + septicTotal + contingency);
+        budgetEls.barndoFeesTotal.textContent = budgetMoney.format(engineeringAdmin + projectManagement);
+        budgetEls.barndoRetailBeforeTax.textContent = budgetMoney.format(retailBeforeTax);
+        budgetEls.barndoTaxTotal.textContent = budgetMoney.format(taxTotal);
+        budgetEls.barndoCostHomeSqft.textContent = livingSqft ? `${budgetMoney.format(totalCostBeforeMargin / livingSqft)} / sq ft` : "$0 / sq ft";
+        budgetEls.barndoRetailCoveredSqft.textContent = totalCoveredSqft ? `${budgetMoney.format(retailBeforeTax / totalCoveredSqft)} / sq ft` : "$0 / sq ft";
       }
 
       budgetIds.forEach((id) => {
