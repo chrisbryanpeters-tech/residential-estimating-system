@@ -126,16 +126,6 @@
             <span>Estimated retail</span>
             <strong id="barndoRetailAfterTax">$0</strong>
           </div>
-          <div class="budget-metrics">
-            <article>
-              <span>Budget / home sq ft</span>
-              <strong id="barndoCostHomeSqft">$0</strong>
-            </article>
-            <article>
-              <span>Budget / covered sq ft</span>
-              <strong id="barndoRetailCoveredSqft">$0</strong>
-            </article>
-          </div>
           <p class="budget-note">
             Uses the workbook rate table. Budget pricing only; final pricing depends on drawings,
             site conditions, supplier pricing, selections, and confirmed scope.
@@ -233,8 +223,6 @@
         [
           ...budgetIds,
           "barndoRetailAfterTax",
-          "barndoCostHomeSqft",
-          "barndoRetailCoveredSqft",
         ].map((id) => [id, document.getElementById(id)]),
       );
 
@@ -298,8 +286,6 @@
         const retailAfterTax = retailBeforeTax + taxTotal;
 
         budgetEls.barndoRetailAfterTax.textContent = budgetMoney.format(retailAfterTax);
-        budgetEls.barndoCostHomeSqft.textContent = livingSqft ? `${budgetMoney.format(retailAfterTax / livingSqft)} / sq ft` : "$0 / sq ft";
-        budgetEls.barndoRetailCoveredSqft.textContent = totalCoveredSqft ? `${budgetMoney.format(retailAfterTax / totalCoveredSqft)} / sq ft` : "$0 / sq ft";
       }
 
       budgetIds.forEach((id) => {
