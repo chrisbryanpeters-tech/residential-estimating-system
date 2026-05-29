@@ -112,12 +112,8 @@ label {
   grid-template-columns: 104px minmax(0, 760px);
   gap: 18px;
   align-items: center;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 14px;
-  margin-bottom: 16px;
-  box-shadow: var(--shadow);
+  grid-column: 1 / -1;
+  padding: 16px 16px 4px;
 }
 
 .budget-brand {
@@ -160,25 +156,23 @@ label {
 .budget-calculator {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 410px;
-  gap: 12px;
+  gap: 0 12px;
   align-items: stretch;
-}
-
-.budget-form,
-.budget-results {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
   box-shadow: var(--shadow);
+  overflow: hidden;
 }
 
 .budget-form {
   display: grid;
   gap: 0;
+  padding: 0 0 16px 16px;
 }
 
 .budget-form-section {
-  padding: 12px;
+  padding: 12px 0;
   border-bottom: 1px solid #e5ebed;
 }
 
@@ -198,14 +192,13 @@ label {
 }
 
 .budget-results {
-  position: sticky;
-  top: 18px;
   display: grid;
   align-self: stretch;
   align-content: center;
   grid-template-columns: 1fr;
   gap: 12px;
-  padding: 18px;
+  padding: 16px;
+  border-left: 1px solid #e5ebed;
 }
 
 .budget-range {
