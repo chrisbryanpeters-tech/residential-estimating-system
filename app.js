@@ -8,7 +8,7 @@ const els = {};
 const state = {
   library: null,
   lines: [],
-  estimateViewMode: "all",
+  estimateViewMode: "rtm",
   expanded: new Set(),
   openCalcLineId: null,
   calcValues: {},
@@ -46,6 +46,8 @@ const state = {
     selectedItemId: "",
     scope: "current",
     tradeFilter: "All trades",
+    viewMode: "calendar",
+    ganttSort: "project",
     editorOpen: false,
     dayPopupDate: "",
     resizeDrag: null,
@@ -56,8 +58,11 @@ const state = {
   activeSelectionCategory: "",
   output: {
     estimateVersionId: "current",
+    additionalEstimateVersionIds: [],
+    proposalVersionId: "",
     estimateDate: "",
     providedBy: "",
+    emailRecipients: "",
     location: "",
     intro: "",
     movingNotes: "",
@@ -67,11 +72,14 @@ const state = {
     descriptionsManual: {},
     scopeItems: [],
   },
+  proposalVersions: [],
+  sentProposalVersionId: "",
   contract: {
     date: "",
     estimateVersionId: "current",
     customerName: "",
     location: "",
+    emailRecipients: "",
     depositTerms: "Deposit and payment schedule to be confirmed with Zak's Homes & Cottages prior to production start.",
     approval: {
       status: "Pending review",
@@ -286,6 +294,7 @@ const outputGroups = [
   { title: "Electrical", sections: ["Electrical"] },
   { title: "Plumbing", sections: ["Plumbing/Mechanical"] },
   { title: "Site Work", sections: ["Site Estimate - Project Materials", "Site Estimate - Foundation", "Site Estimate - Septic", "Site Estimate - Framing", "Site Estimate - Roofing", "Site Estimate - Plumbing/Mechanical", "Site Estimate - Electrical", "Site Estimate - Exterior", "Site Estimate - Insulation", "Site Estimate - Drywall", "Site Estimate - Mud & Tape", "Site Estimate - Paint", "Site Estimate - Finishing", "Site Estimate - Cabinets", "Site Estimate - Flooring", "Site Estimate - Custom Work", "Site Estimate - Miscellaneous", "Site Estimate - Project Costs"] },
+  { title: "Shouse / Barndominium", sections: ["Shouse Estimate - Shell", "Shouse Estimate - Finish", "Shouse Estimate - Openings", "Shouse Estimate - Site & Allowances", "Shouse Estimate - Fees"] },
   { title: "Base Moving Costs", sections: ["Miscellaneous", "Project Costs"], include: ["moving", "move", "delivery", "deliveries", "transport"] },
 ];
 
@@ -1834,6 +1843,24 @@ const siteEstimateTemplates = [
   }
 ];
 
+const shouseEstimateTemplates = [
+  { section: "Shouse Estimate - Shell", code: "1000", category: "Material & Labor", description: "Home shell base", note: "Home area x base shell rate from barndominium calculator", quantitySource: "houseSqft", unit: "Sq/Ft", unitCost: 150 },
+  { section: "Shouse Estimate - Finish", code: "1100", category: "Material & Labor", description: "Home interior finish", note: "Basic / Mid / High / Custom finish allowance", quantitySource: "houseSqft", unit: "Sq/Ft", unitCost: 95 },
+  { section: "Shouse Estimate - Shell", code: "2000", category: "Material & Labor", description: "Shop shell base", note: "Shop or shouse garage area x base shell rate", quantitySource: "garageSqft", unit: "Sq/Ft", unitCost: 65 },
+  { section: "Shouse Estimate - Finish", code: "2100", category: "Material & Labor", description: "Shop finish", note: "Basic / Insulated / Finished shop allowance", quantitySource: "garageSqft", unit: "Sq/Ft", unitCost: 35 },
+  { section: "Shouse Estimate - Shell", code: "3000", category: "Material & Labor", description: "Covered porch", note: "Roof, posts, decking or concrete allowance", unit: "Sq/Ft", unitCost: 85 },
+  { section: "Shouse Estimate - Site & Allowances", code: "4000", category: "Material & Labor", description: "Foundation allowance", note: "Slab, crawlspace or basement allowance", unit: "Sq/Ft", unitCost: 28 },
+  { section: "Shouse Estimate - Shell", code: "5000", category: "Material & Labor", description: "Exterior finish upgrade", note: "Metal included; LP SmartSide, Hardie, stucco upgrade allowance", unit: "Sq/Ft", unitCost: 0 },
+  { section: "Shouse Estimate - Shell", code: "5100", category: "Material & Labor", description: "Roof upgrade / credit", note: "Metal included; asphalt credit or premium metal upgrade", unit: "Sq/Ft", unitCost: 0 },
+  { section: "Shouse Estimate - Finish", code: "5200", category: "Material & Labor", description: "Insulation upgrade", note: "Standard included; enhanced or spray foam upgrade allowance", unit: "Sq/Ft", unitCost: 0 },
+  { section: "Shouse Estimate - Openings", code: "6000", category: "Allowance", description: "Overhead doors, windows and doors", note: "Use opening schedule pricing from barndominium calculator", unit: "Allowance", unitCost: 0 },
+  { section: "Shouse Estimate - Site & Allowances", code: "7000", category: "Project Cost", description: "Travel / mobilization", note: "One-way kilometres x mobilization rate", quantitySource: "travelDistance", unit: "Km", unitCost: 12 },
+  { section: "Shouse Estimate - Site & Allowances", code: "8000", category: "Allowance", description: "Utility rough-in allowance", note: "Manual utility allowance", unit: "Allowance", unitCost: 25000 },
+  { section: "Shouse Estimate - Site & Allowances", code: "8100", category: "Allowance", description: "Septic / water allowance", note: "Manual septic and water allowance", unit: "Allowance", unitCost: 0 },
+  { section: "Shouse Estimate - Site & Allowances", code: "8200", category: "Allowance", description: "Custom allowance / contingency", note: "Manual allowance or contingency", unit: "Allowance", unitCost: 80000 },
+  { section: "Shouse Estimate - Fees", code: "9000", category: "Project Cost", description: "Engineering / permits / admin", note: "Percentage or allowance from barndominium calculator", unit: "Allowance", unitCost: 0 },
+];
+
 const contractInclusionOptions = [
   "Project drawings and specifications attached to this agreement",
   "House construction based on selected estimate version",
@@ -2111,24 +2138,35 @@ function projectInputs() {
   };
 }
 
+function updateAreaLabels() {
+  if (!els.houseSqftLabel || !els.garageSqftLabel) return;
+  const projectType = els.projectType?.value || "RTM";
+  const detachedGarage = projectType === "Detached Garage";
+  els.houseSqftField?.toggleAttribute("hidden", detachedGarage);
+  els.houseSqftLabel.textContent = projectType === "Shouse / Barndominium" ? "House sq ft" : "House sq ft";
+  els.garageSqftLabel.textContent =
+    projectType === "Shouse / Barndominium" ? "Shop sq ft" : projectType === "Detached Garage" ? "Detached garage sq ft" : "Garage sq ft";
+}
+
 function syncProjectLevelAvailability() {
-  const isSimpleHome = els.projectType?.value === "Simple Home";
+  const isSimpleHome = false;
   if (!els.projectLevel) return;
   els.projectLevel.disabled = isSimpleHome;
   if (isSimpleHome) els.projectLevel.value = "Standard";
 }
 
 function projectServiceHours() {
-  if (els.projectType?.value === "Simple Home") return 40;
+  if (els.projectType?.value === "Detached Garage") return 40;
   if (els.projectType?.value === "RTM") {
     return els.projectLevel?.value === "Standard" ? 80 : 120;
   }
+  if (els.projectType?.value === "Shouse / Barndominium") return 120;
   return els.projectLevel?.value === "Standard" ? 80 : 120;
 }
 
 function projectCostPercent() {
-  if (els.projectType?.value === "Simple Home") return 1;
-  if (els.projectType?.value === "Site-built") return 4;
+  if (els.projectType?.value === "Detached Garage") return 2;
+  if (els.projectType?.value === "Site Build" || els.projectType?.value === "Site-built" || els.projectType?.value === "Shouse / Barndominium") return 4;
   return 3;
 }
 
@@ -2407,6 +2445,17 @@ function sectionMargin(sectionName) {
   return projectInputs().targetMargin;
 }
 
+function targetMarginValue() {
+  return num(els.targetMargin?.value, 18);
+}
+
+function syncEstimateMarginsToTarget() {
+  const margin = targetMarginValue();
+  state.lines.forEach((line) => {
+    line.margin = margin;
+  });
+}
+
 function createEstimateLines({ blank = false } = {}) {
   const inputs = projectInputs();
   const rtmLines = state.library.line_items.map((item, index) => {
@@ -2424,7 +2473,7 @@ function createEstimateLines({ blank = false } = {}) {
       quantityManual: blank,
       unit: item.unit || "Package",
       unitCost: blank ? "" : typeof item.default_unit_cost === "number" ? item.default_unit_cost : 0,
-      margin: blank ? "" : sectionMargin(item.section),
+      margin: sectionMargin(item.section),
       pst: item.tax_pst_default !== false,
       gst: item.tax_gst_default !== false,
       visible: item.customer_visible_default !== false,
@@ -2432,15 +2481,18 @@ function createEstimateLines({ blank = false } = {}) {
       includeContract: item.customer_visible_default !== false,
       proposalSort: (index + 1) * 10,
       proposalIndent: 0,
+      buildTypes: ["rtm"],
     };
     line.proposalSection = defaultProposalSection(line);
     return line;
   });
-  return [...rtmLines, ...createSiteEstimateLines({ blank, startIndex: rtmLines.length })];
+  const siteLines = createSiteEstimateLines({ blank, startIndex: rtmLines.length });
+  return [...rtmLines, ...siteLines, ...createShouseEstimateLines({ blank, startIndex: rtmLines.length + siteLines.length })];
 }
 
 function createSiteEstimateLines({ blank = false, startIndex = 0 } = {}) {
   return siteEstimateTemplates.map((item, index) => {
+    const itemQuantitySource = siteEstimateQuantitySource(item);
     const line = {
       id: `site-${index + 1}-${item.description.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
       section: item.section,
@@ -2451,11 +2503,11 @@ function createSiteEstimateLines({ blank = false, startIndex = 0 } = {}) {
       customerDescription: "",
       note: item.note || "",
       quantity: "",
-      quantitySource: item.quantitySource || "",
+      quantitySource: itemQuantitySource,
       quantityManual: true,
       unit: item.unit || "Package",
       unitCost: blank ? "" : item.unitCost,
-      margin: blank ? "" : item.margin ?? sectionMargin(item.section),
+      margin: item.margin ?? sectionMargin(item.section),
       pst: true,
       gst: true,
       visible: true,
@@ -2465,9 +2517,55 @@ function createSiteEstimateLines({ blank = false, startIndex = 0 } = {}) {
       proposalSort: (startIndex + index + 1) * 10,
       proposalIndent: 0,
       isSiteEstimate: true,
+      buildTypes: siteLineBuildTypes(item),
     };
     return line;
   });
+}
+
+function createShouseEstimateLines({ blank = false, startIndex = 0 } = {}) {
+  return shouseEstimateTemplates.map((item, index) => ({
+    id: `shouse-${index + 1}-${item.description.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
+    section: item.section,
+    sourceRow: "",
+    code: item.code || "",
+    category: cleanCategory(item.category),
+    description: item.description,
+    customerDescription: "",
+    note: item.note || "",
+    quantity: !blank && item.quantitySource ? projectInputs()[item.quantitySource] || "" : "",
+    quantitySource: item.quantitySource || "",
+    quantityManual: !item.quantitySource,
+    unit: item.unit || "Package",
+    unitCost: blank ? "" : item.unitCost,
+    margin: item.margin ?? sectionMargin(item.section),
+    pst: true,
+    gst: true,
+    visible: true,
+    includeProposal: false,
+    includeContract: false,
+    proposalSection: "Shouse / Barndominium",
+    proposalSort: (startIndex + index + 1) * 10,
+    proposalIndent: 0,
+    isShouseEstimate: true,
+    buildTypes: ["shouse"],
+  }));
+}
+
+function siteLineBuildTypes(item) {
+  const text = `${item.section} ${item.description} ${item.note || ""}`.toLowerCase();
+  const buildTypes = ["site"];
+  const garageWords = ["garage", "overhead", "slab", "apron", "piles", "screw", "framing", "roof", "shingles", "siding", "soffit", "fasica", "fascia", "electrical", "insulation", "drywall", "mud", "paint", "heater", "epoxy", "porta", "disposal", "engineering", "code review", "drafting", "warranty"];
+  if (garageWords.some((word) => text.includes(word))) buildTypes.push("garage");
+  return buildTypes;
+}
+
+function siteEstimateQuantitySource(item) {
+  if (item.quantitySource) return item.quantitySource;
+  const text = `${item.description} ${item.note || ""}`.toLowerCase();
+  const unit = String(item.unit || "").toLowerCase();
+  if (siteLineBuildTypes(item).includes("garage") && unit.includes("sq/ft") && text.includes("garage")) return "garageSqft";
+  return "";
 }
 
 function hydrateLines() {
@@ -2495,6 +2593,8 @@ function serializeEstimateState() {
       category: line.category,
       description: line.description,
       isSiteEstimate: Boolean(line.isSiteEstimate),
+      isShouseEstimate: Boolean(line.isShouseEstimate),
+      buildTypes: Array.isArray(line.buildTypes) ? line.buildTypes : [],
       customerDescription: line.customerDescription || "",
       proposalSection: line.proposalSection || defaultProposalSection(line),
       proposalSort: num(line.proposalSort),
@@ -2528,6 +2628,8 @@ function restoreEstimateState(estimate) {
       ...line,
       category: saved.category || line.category,
       description: saved.description || line.description,
+      isShouseEstimate: saved.isShouseEstimate !== undefined ? Boolean(saved.isShouseEstimate) : Boolean(line.isShouseEstimate),
+      buildTypes: Array.isArray(saved.buildTypes) && saved.buildTypes.length ? saved.buildTypes : line.buildTypes || [],
       customerDescription: saved.customerDescription || "",
       proposalSection: saved.proposalSection || line.proposalSection || defaultProposalSection(line),
       proposalSort: saved.proposalSort === "" || saved.proposalSort === undefined ? line.proposalSort : num(saved.proposalSort),
@@ -2535,7 +2637,7 @@ function restoreEstimateState(estimate) {
       includeProposal: saved.includeProposal !== undefined ? Boolean(saved.includeProposal) : line.includeProposal !== false,
       includeContract: saved.includeContract !== undefined ? Boolean(saved.includeContract) : line.includeContract !== false,
       quantity: saved.quantity === "" ? "" : num(saved.quantity),
-      quantitySource: saved.quantitySource ?? line.quantitySource,
+      quantitySource: saved.quantitySource || line.quantitySource,
       quantityManual: saved.quantityManual !== undefined ? Boolean(saved.quantityManual) : true,
       unit: saved.unit || line.unit,
       unitCost: saved.unitCost === "" ? "" : num(saved.unitCost),
@@ -2639,8 +2741,10 @@ function totalsForLines(lines) {
 
 function estimateSnapshot() {
   const totals = grandTotals();
-  const rtmTotals = totalsForLines(state.lines.filter((line) => !line.isSiteEstimate && !isSiteEstimateSection(line.section)));
+  const rtmTotals = totalsForLines(state.lines.filter((line) => !line.isSiteEstimate && !line.isShouseEstimate && !isSiteEstimateSection(line.section) && !isShouseEstimateSection(line.section)));
   const siteTotals = totalsForLines(state.lines.filter((line) => line.isSiteEstimate || isSiteEstimateSection(line.section)));
+  const garageTotals = totalsForLines(state.lines.filter((line) => lineSupportsEstimateMode(line, "garage")));
+  const shouseTotals = totalsForLines(state.lines.filter((line) => line.isShouseEstimate || isShouseEstimateSection(line.section)));
   const lines = state.lines
     .filter((line) => line.visible && (num(line.quantity) || num(line.unitCost) || (line.isSiteEstimate && (line.includeProposal || line.includeContract))))
     .map((line) => {
@@ -2652,6 +2756,8 @@ function estimateSnapshot() {
         category: line.category,
         description: line.description,
         isSiteEstimate: Boolean(line.isSiteEstimate),
+        isShouseEstimate: Boolean(line.isShouseEstimate),
+        buildTypes: Array.isArray(line.buildTypes) ? line.buildTypes : [],
         customerDescription: line.customerDescription || "",
         proposalSection: line.proposalSection || defaultProposalSection(line),
         proposalSort: num(line.proposalSort),
@@ -2672,6 +2778,8 @@ function estimateSnapshot() {
     totals,
     rtmTotals,
     siteTotals,
+    garageTotals,
+    shouseTotals,
     lines,
     fingerprint: JSON.stringify(
       lines.map((line) => [
@@ -2711,6 +2819,15 @@ function syncProjectQuantities() {
       applyCalculator(line);
       return;
     }
+    if (
+      (line.isShouseEstimate || (els.projectType?.value === "Detached Garage" && lineSupportsEstimateMode(line, "garage"))) &&
+      line.quantitySource &&
+      (line.quantity === "" || line.quantity === undefined || line.quantityManual === false)
+    ) {
+      line.quantity = inputs[line.quantitySource] ?? line.quantity;
+      line.quantityManual = false;
+      return;
+    }
     if (line.quantityManual || !line.quantitySource) return;
     line.quantity = inputs[line.quantitySource] ?? line.quantity;
   });
@@ -2742,12 +2859,16 @@ function syncProjectQuantities() {
 
 function updateTotals() {
   const totals = grandTotals();
-  const rtmTotals = totalsForLines(state.lines.filter((line) => !line.isSiteEstimate && !isSiteEstimateSection(line.section)));
+  const rtmTotals = totalsForLines(state.lines.filter((line) => !line.isSiteEstimate && !line.isShouseEstimate && !isSiteEstimateSection(line.section) && !isShouseEstimateSection(line.section)));
   const siteTotals = totalsForLines(state.lines.filter((line) => line.isSiteEstimate || isSiteEstimateSection(line.section)));
+  const garageTotals = totalsForLines(state.lines.filter((line) => lineSupportsEstimateMode(line, "garage")));
+  const shouseTotals = totalsForLines(state.lines.filter((line) => line.isShouseEstimate || isShouseEstimateSection(line.section)));
   const margin = totals.retail > 0 ? (1 - totals.cost / totals.retail) * 100 : 0;
   const sqft = num(els.houseSqft.value);
   els.rtmEstimateTotal.textContent = money.format(rtmTotals.total);
   els.siteEstimateTotal.textContent = money.format(siteTotals.total);
+  els.garageEstimateTotal.textContent = money.format(garageTotals.total);
+  els.shouseEstimateTotal.textContent = money.format(shouseTotals.total);
   els.combinedEstimateTotal.textContent = money.format(totals.total);
   els.totalCost.textContent = money.format(totals.cost);
   els.totalRetail.textContent = money.format(totals.retail);
@@ -2775,10 +2896,38 @@ function isSiteEstimateSection(sectionName = "") {
   return String(sectionName).startsWith("Site Estimate -");
 }
 
-function isSectionVisibleForEstimateMode(sectionName = "") {
-  if (state.estimateViewMode === "site") return isSiteEstimateSection(sectionName);
-  if (state.estimateViewMode === "rtm") return !isSiteEstimateSection(sectionName);
+function isShouseEstimateSection(sectionName = "") {
+  return String(sectionName).startsWith("Shouse Estimate -");
+}
+
+function estimateModeFromProjectType(projectType = els.projectType?.value || "RTM") {
+  if (projectType === "Site Build" || projectType === "Site-built") return "site";
+  if (projectType === "Detached Garage") return "garage";
+  if (projectType === "Shouse / Barndominium") return "shouse";
+  return "rtm";
+}
+
+function projectTypeFromEstimateMode(mode) {
+  if (mode === "site") return "Site Build";
+  if (mode === "garage") return "Detached Garage";
+  if (mode === "shouse") return "Shouse / Barndominium";
+  if (mode === "rtm") return "RTM";
+  return els.projectType?.value || "RTM";
+}
+
+function lineSupportsEstimateMode(line, mode = state.estimateViewMode) {
+  if (mode === "all") return true;
+  const buildTypes = Array.isArray(line.buildTypes) ? line.buildTypes : [];
+  if (buildTypes.includes(mode)) return true;
+  if (mode === "site") return Boolean(line.isSiteEstimate || isSiteEstimateSection(line.section));
+  if (mode === "shouse") return Boolean(line.isShouseEstimate || isShouseEstimateSection(line.section));
+  if (mode === "rtm") return !line.isSiteEstimate && !line.isShouseEstimate && !isSiteEstimateSection(line.section) && !isShouseEstimateSection(line.section);
+  if (mode === "garage") return buildTypes.includes("garage");
   return true;
+}
+
+function isSectionVisibleForEstimateMode(sectionName = "") {
+  return isSectionVisibleForMode(sectionName, state.estimateViewMode);
 }
 
 function filteredSections() {
@@ -2805,14 +2954,16 @@ function renderSections() {
   els.sectionsList.innerHTML = "";
   updateEstimateScopeControls();
   for (const section of filteredSections()) {
-    const totals = sectionTotals(section.section_name, inputs);
+    const sectionLines = state.lines.filter((line) => line.section === section.section_name && lineSupportsEstimateMode(line));
+    const totals = totalsForLines(sectionLines);
     const expanded = state.expanded.has(section.section_name);
     const wrapper = document.createElement("article");
     const siteSection = isSiteEstimateSection(section.section_name);
-    wrapper.className = `estimate-section ${siteSection ? "site-estimate-section" : "rtm-estimate-section"}`;
+    const shouseSection = isShouseEstimateSection(section.section_name);
+    wrapper.className = `estimate-section ${shouseSection ? "shouse-estimate-section" : siteSection ? "site-estimate-section" : "rtm-estimate-section"}`;
     wrapper.innerHTML = `
       <button class="section-head" data-toggle-section="${section.section_name}">
-        <div><small>${siteSection ? "Site Estimate" : "RTM Estimate"}</small><strong>${section.section_name}</strong><br><span>${state.lines.filter((line) => line.section === section.section_name).length} line items</span></div>
+        <div><small>${shouseSection ? "Shouse / Barndominium" : siteSection ? "Site Estimate" : "RTM Estimate"}</small><strong>${section.section_name}</strong><br><span>${sectionLines.length} line items</span></div>
         <span>Cost ${money.format(totals.cost)}</span>
         <span>Retail ${money.format(totals.retail)}</span>
         <span>Tax ${money.format(totals.pst + totals.gst)}</span>
@@ -2830,19 +2981,38 @@ function renderSections() {
 function updateEstimateScopeControls() {
   const counts = {
     all: estimateSections().length,
-    rtm: estimateSections().filter((section) => !isSiteEstimateSection(section.section_name)).length,
+    rtm: estimateSections().filter((section) => isSectionVisibleForMode(section.section_name, "rtm")).length,
     site: estimateSections().filter((section) => isSiteEstimateSection(section.section_name)).length,
+    garage: estimateSections().filter((section) => isSectionVisibleForMode(section.section_name, "garage")).length,
+    shouse: estimateSections().filter((section) => isShouseEstimateSection(section.section_name)).length,
   };
   document.querySelectorAll("[data-estimate-scope]").forEach((button) => {
     const scope = button.dataset.estimateScope;
     button.classList.toggle("active", state.estimateViewMode === scope);
-    const label = scope === "all" ? "All" : scope === "rtm" ? "RTM Estimate" : "Site Estimate";
+    const label =
+      scope === "all"
+        ? "All"
+        : scope === "rtm"
+          ? "RTM"
+          : scope === "site"
+            ? "Site Build"
+            : scope === "garage"
+              ? "Detached Garage"
+              : "Shouse / Barndominium";
     button.textContent = `${label} (${counts[scope] || 0})`;
   });
 }
 
+function isSectionVisibleForMode(sectionName, mode) {
+  if (mode === "site") return isSiteEstimateSection(sectionName);
+  if (mode === "shouse") return isShouseEstimateSection(sectionName);
+  if (mode === "rtm") return !isSiteEstimateSection(sectionName) && !isShouseEstimateSection(sectionName);
+  if (mode === "garage") return state.lines.some((line) => line.section === sectionName && lineSupportsEstimateMode(line, "garage"));
+  return true;
+}
+
 function renderLineTable(sectionName) {
-  const lines = state.lines.filter((line) => line.section === sectionName);
+  const lines = state.lines.filter((line) => line.section === sectionName && lineSupportsEstimateMode(line));
   return `
     <table class="line-table">
       <thead>
@@ -3548,18 +3718,9 @@ function renderReview() {
     })
     .join("");
 
-  const warnings = [];
-  for (const line of state.lines) {
-    if (line.description && num(line.unitCost) === 0) {
-      warnings.push(`${line.description}: no unit cost`);
-    }
-    if (num(line.margin) < 10 && num(line.unitCost) > 0) {
-      warnings.push(`${line.description}: margin under 10%`);
-    }
+  if (els.reviewWarnings) {
+    els.reviewWarnings.innerHTML = "";
   }
-  els.reviewWarnings.innerHTML = warnings.length
-    ? warnings.slice(0, 24).map((warning) => `<article><span>${warning}</span><span class="status-pill">Review</span></article>`).join("")
-    : `<article><span>No review warnings from the current visible logic.</span><span class="status-pill">OK</span></article>`;
 }
 
 function renderEstimateVersions() {
@@ -3617,6 +3778,8 @@ function saveEstimateVersion() {
     totals: snapshot.totals,
     rtmTotals: snapshot.rtmTotals,
     siteTotals: snapshot.siteTotals,
+    garageTotals: snapshot.garageTotals,
+    shouseTotals: snapshot.shouseTotals,
     lines: snapshot.lines,
     fingerprint: snapshot.fingerprint,
   };
@@ -3661,7 +3824,9 @@ function loadEstimateVersion(versionId) {
   if (!ok) return;
   restoreEstimateState({ lines: version.lines || [] });
   state.output.estimateVersionId = "current";
+  state.output.proposalVersionId = "";
   state.contract.estimateVersionId = "current";
+  state.contract.proposalVersionId = "current";
   state.openEstimateVersionId = "";
   saveActiveCrmRecordEdits();
   render();
@@ -3763,11 +3928,19 @@ function outputState() {
   if (!state.output.manual) state.output.manual = {};
   if (!state.output.descriptionsManual) state.output.descriptionsManual = {};
   if (!state.output.estimateVersionId) state.output.estimateVersionId = state.sentEstimateVersionId || "current";
-  if (state.output.estimateVersionId !== "current" && !state.estimateVersions?.some((version) => version.id === state.output.estimateVersionId)) {
+  const validEstimateIds = new Set(["current", ...(state.estimateVersions || []).map((version) => version.id)]);
+  if (!validEstimateIds.has(state.output.estimateVersionId)) {
     state.output.estimateVersionId = "current";
+  }
+  state.output.additionalEstimateVersionIds = Array.isArray(state.output.additionalEstimateVersionIds)
+    ? [...new Set(state.output.additionalEstimateVersionIds)].filter((id) => validEstimateIds.has(id) && id !== state.output.estimateVersionId)
+    : [];
+  if (state.output.proposalVersionId && !state.proposalVersions?.some((version) => version.id === state.output.proposalVersionId)) {
+    state.output.proposalVersionId = "";
   }
   if (!state.output.manual.estimateDate) state.output.estimateDate = state.output.estimateDate || todayIso();
   if (!state.output.manual.providedBy) state.output.providedBy = loggedInSalespersonName();
+  if (!state.output.manual.emailRecipients) state.output.emailRecipients = state.output.emailRecipients || els.crmEmail?.value || "";
   if (!state.output.manual.location) state.output.location = address || (town ? `${town}, ${province}` : `, ${province}`);
   if (!state.output.manual.intro) {
     state.output.intro = `${num(els.houseSqft?.value || 0)} square foot ${els.projectType?.value || "RTM"} built as per National Building and Energy Code guidelines and attached preliminary drawings with the following design specifications and features:`;
@@ -3833,10 +4006,25 @@ function proposalVersionOptions(selectedId) {
   ].join("");
 }
 
-function selectedProposalEstimate() {
-  const output = outputState();
-  const saved = state.estimateVersions?.find((version) => version.id === output.estimateVersionId);
-  if (saved) return saved;
+function renderProposalEstimateAddons(output = outputState()) {
+  if (!els.outputEstimateAddons) return;
+  const additionalIds = new Set(output.additionalEstimateVersionIds || []);
+  const options = proposalEstimateSources().filter((estimate) => estimate.id !== output.estimateVersionId);
+  els.outputEstimateAddons.innerHTML = options.length
+    ? options
+        .map(
+          (estimate) => `
+            <label class="check-row">
+              <input data-output-estimate-addon="${escapeAttr(estimate.id)}" type="checkbox" ${additionalIds.has(estimate.id) ? "checked" : ""} />
+              <span>${escapeAttr(estimate.versionName || "Current working estimate")} - ${money.format(estimate.totals?.total || 0)}</span>
+            </label>
+          `,
+        )
+        .join("")
+    : `<p class="empty-note">Save another estimate version to combine it into this proposal.</p>`;
+}
+
+function currentProposalEstimate() {
   const snapshot = estimateSnapshot();
   return {
     id: "current",
@@ -3847,8 +4035,79 @@ function selectedProposalEstimate() {
     totals: snapshot.totals,
     rtmTotals: snapshot.rtmTotals,
     siteTotals: snapshot.siteTotals,
+    garageTotals: snapshot.garageTotals,
+    shouseTotals: snapshot.shouseTotals,
     lines: snapshot.lines,
   };
+}
+
+function proposalEstimateSources() {
+  return [currentProposalEstimate(), ...(state.estimateVersions || [])];
+}
+
+function proposalEstimateById(id) {
+  return proposalEstimateSources().find((estimate) => estimate.id === id) || currentProposalEstimate();
+}
+
+function addTotals(...totalsList) {
+  return totalsList.reduce(
+    (sum, totals = {}) => ({
+      cost: sum.cost + num(totals.cost),
+      retail: sum.retail + num(totals.retail),
+      pst: sum.pst + num(totals.pst),
+      gst: sum.gst + num(totals.gst),
+      total: sum.total + num(totals.total),
+    }),
+    { cost: 0, retail: 0, pst: 0, gst: 0, total: 0 },
+  );
+}
+
+function addSplitTotals(estimates, key) {
+  return estimates.reduce(
+    (sum, estimate) => {
+      const split = estimateSplitTotals(estimate)[key] || {};
+      return {
+        retail: sum.retail + num(split.retail),
+        total: sum.total + num(split.total),
+      };
+    },
+    { retail: 0, total: 0 },
+  );
+}
+
+function cloneProposalLine(line, estimate, prefixLineIds) {
+  return {
+    ...line,
+    id: prefixLineIds ? `${estimate.id}::${line.id}` : line.id,
+    sourceEstimateId: estimate.id,
+    sourceEstimateName: estimate.versionName || "Current working estimate",
+  };
+}
+
+function combineProposalEstimates(estimates) {
+  if (estimates.length <= 1) return estimates[0] || currentProposalEstimate();
+  return {
+    ...estimates[0],
+    id: estimates.map((estimate) => estimate.id).join("+"),
+    versionName: estimates.map((estimate) => estimate.versionName || "Current working estimate").join(" + "),
+    totals: addTotals(...estimates.map((estimate) => estimate.totals)),
+    rtmTotals: addSplitTotals(estimates, "rtm"),
+    siteTotals: addSplitTotals(estimates, "site"),
+    garageTotals: addSplitTotals(estimates, "garage"),
+    shouseTotals: addSplitTotals(estimates, "shouse"),
+    lines: estimates.flatMap((estimate) => (estimate.lines || []).map((line) => cloneProposalLine(line, estimate, true))),
+    combinedEstimateIds: estimates.map((estimate) => estimate.id),
+  };
+}
+
+function selectedProposalEstimates() {
+  const output = outputState();
+  const ids = [output.estimateVersionId, ...(output.additionalEstimateVersionIds || [])];
+  return ids.map(proposalEstimateById);
+}
+
+function selectedProposalEstimate() {
+  return combineProposalEstimates(selectedProposalEstimates());
 }
 
 function proposalLines(estimate = selectedProposalEstimate()) {
@@ -3857,10 +4116,19 @@ function proposalLines(estimate = selectedProposalEstimate()) {
 }
 
 function estimateSplitTotals(estimate) {
-  const fallback = (site) =>
+  const fallback = (mode) =>
     (estimate.lines || []).reduce(
       (acc, line) => {
-        const matches = Boolean(line.isSiteEstimate || isSiteEstimateSection(line.section)) === site;
+        const matches =
+          mode === "rtm"
+            ? !line.isSiteEstimate && !line.isShouseEstimate && !isSiteEstimateSection(line.section) && !isShouseEstimateSection(line.section)
+            : mode === "site"
+              ? Boolean(line.isSiteEstimate || isSiteEstimateSection(line.section))
+              : mode === "garage"
+                ? Array.isArray(line.buildTypes) && line.buildTypes.includes("garage")
+                : mode === "shouse"
+                  ? Boolean(line.isShouseEstimate || isShouseEstimateSection(line.section))
+                  : false;
         if (!matches) return acc;
         acc.retail += num(line.retail);
         acc.total += num(line.total);
@@ -3869,8 +4137,10 @@ function estimateSplitTotals(estimate) {
       { retail: 0, total: 0 },
     );
   return {
-    rtm: estimate.rtmTotals || fallback(false),
-    site: estimate.siteTotals || fallback(true),
+    rtm: estimate.rtmTotals || fallback("rtm"),
+    site: estimate.siteTotals || fallback("site"),
+    garage: estimate.garageTotals || fallback("garage"),
+    shouse: estimate.shouseTotals || fallback("shouse"),
   };
 }
 
@@ -3888,6 +4158,7 @@ function lineOutputText(line) {
 }
 
 function outputGroupForLine(line) {
+  if (line.isShouseEstimate || String(line.section || "").startsWith("Shouse Estimate -")) return outputGroups.find((group) => group.title === "Shouse / Barndominium");
   if (line.isSiteEstimate || String(line.section || "").startsWith("Site Estimate -")) return outputGroups.find((group) => group.title === "Site Work");
   const section = line.section;
   const description = line.description.toLowerCase();
@@ -3929,8 +4200,10 @@ function renderEstimateOutput() {
   const estimateDateText = prettyDate(output.estimateDate);
   els.outputEstimateVersion.innerHTML = proposalVersionOptions(output.estimateVersionId);
   els.outputEstimateVersion.value = output.estimateVersionId;
+  renderProposalEstimateAddons(output);
   els.outputEstimateDate.value = output.estimateDate;
   els.outputProvidedBy.value = output.providedBy;
+  els.outputEmailRecipients.value = output.emailRecipients || "";
   els.outputLocation.value = output.location;
   els.outputIntro.value = output.intro;
   els.outputMovingNotes.value = output.movingNotes;
@@ -3941,7 +4214,7 @@ function renderEstimateOutput() {
     .map(
       (line) => `
         <label data-output-line="${line.id}">
-          ${escapeAttr(line.section)} - ${escapeAttr(line.description)}
+          ${line.sourceEstimateName ? `${escapeAttr(line.sourceEstimateName)} - ` : ""}${escapeAttr(line.section)} - ${escapeAttr(line.description)}
           <textarea data-output-description="${line.id}" rows="2">${escapeAttr(lineOutputText(line))}</textarea>
         </label>
       `,
@@ -3991,6 +4264,8 @@ function renderEstimateOutput() {
     <div class="proposal-total-breakdown">
       <div><span>RTM portion</span><strong>${money.format(splitTotals.rtm.total)}</strong></div>
       <div><span>Site portion</span><strong>${money.format(splitTotals.site.total)}</strong></div>
+      <div><span>Detached garage focus</span><strong>${money.format(splitTotals.garage.total)}</strong></div>
+      <div><span>Shouse / barndominium portion</span><strong>${money.format(splitTotals.shouse.total)}</strong></div>
       <div class="combined"><span>Combined total</span><strong>${money.format(totals.total)}</strong></div>
     </div>
     <div class="proposal-subtotal"><span>Subtotal material & labor - Budget Pricing Only</span><strong>${money.format(totals.retail)}</strong></div>
@@ -4015,6 +4290,176 @@ function renderEstimateOutput() {
     <p class="proposal-fine-print">Estimate provided is quoted as a complete project in substance. Any extra charges not included in this quotation, whether agreed to verbally or in writing, will be billed direct and are over and above the amount quoted herein.</p>
   `;
   els.proposalPreview.innerHTML = [pageShell(1, 3, pageOne, true), pageShell(2, 3, pageTwo), pageShell(3, 3, pageThree)].join("");
+  renderProposalVersions();
+}
+
+function proposalVersionSnapshot() {
+  const output = outputState();
+  const estimate = selectedProposalEstimate();
+  const contractLines = estimate.lines
+    .filter((line) => line.includeContract !== false)
+    .concat(outputScopeLines("contract"))
+    .sort((a, b) => num(a.proposalSort, 9999) - num(b.proposalSort, 9999) || String(a.description).localeCompare(String(b.description)));
+  const proposalScopeLines = proposalLines(estimate);
+  return {
+    estimate,
+    proposalLines: proposalScopeLines,
+    contractLines,
+    output: {
+      estimateVersionId: output.estimateVersionId,
+      additionalEstimateVersionIds: [...(output.additionalEstimateVersionIds || [])],
+      estimateDate: output.estimateDate,
+      providedBy: output.providedBy,
+      emailRecipients: output.emailRecipients,
+      location: output.location,
+      intro: output.intro,
+      movingNotes: output.movingNotes,
+      exclusions: output.exclusions,
+    },
+    fingerprint: JSON.stringify({
+      estimateId: estimate.id,
+      total: estimate.totals?.total || 0,
+      lineIds: proposalScopeLines.map((line) => [line.id, lineOutputText(line), line.total || 0]),
+      contractLineIds: contractLines.map((line) => [line.id, lineOutputText(line), line.total || 0]),
+      output: {
+        estimateDate: output.estimateDate,
+        providedBy: output.providedBy,
+        emailRecipients: output.emailRecipients,
+        location: output.location,
+        intro: output.intro,
+        movingNotes: output.movingNotes,
+        exclusions: output.exclusions,
+      },
+    }),
+  };
+}
+
+function saveProposalVersion({ markSent = false } = {}) {
+  const snapshot = proposalVersionSnapshot();
+  const versionNumber = (state.proposalVersions?.length || 0) + 1;
+  const now = new Date();
+  const version = {
+    id: `proposal-version-${Date.now()}`,
+    versionName: `Proposal ${versionNumber}`,
+    createdAt: now.toISOString(),
+    createdAtLabel: now.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" }),
+    customerName: els.customerName?.value || "",
+    projectName: els.projectName?.value || "",
+    projectType: els.projectType?.value || "",
+    estimate: snapshot.estimate,
+    proposalLines: snapshot.proposalLines,
+    contractLines: snapshot.contractLines,
+    output: snapshot.output,
+    totals: snapshot.estimate.totals,
+    fingerprint: snapshot.fingerprint,
+    sentAt: markSent ? now.toISOString() : "",
+    sentAtLabel: markSent ? now.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" }) : "",
+  };
+  state.proposalVersions = [version, ...(state.proposalVersions || [])];
+  state.output.proposalVersionId = version.id;
+  if (markSent) state.sentProposalVersionId = version.id;
+  renderEstimateOutput();
+  renderContract();
+  saveActiveCrmRecordEdits();
+  return version;
+}
+
+function markProposalVersionSent(versionId) {
+  const version = state.proposalVersions?.find((item) => item.id === versionId);
+  if (!version) return null;
+  const now = new Date();
+  version.sentAt = now.toISOString();
+  version.sentAtLabel = now.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" });
+  state.sentProposalVersionId = version.id;
+  state.output.proposalVersionId = version.id;
+  renderProposalVersions();
+  renderContract();
+  saveActiveCrmRecordEdits();
+  return version;
+}
+
+function currentSavedProposalVersion() {
+  const output = outputState();
+  return state.proposalVersions?.find((version) => version.id === output.proposalVersionId);
+}
+
+function ensureSavedProposalVersion({ markSent = false } = {}) {
+  const snapshot = proposalVersionSnapshot();
+  const saved = currentSavedProposalVersion();
+  if (saved && saved.fingerprint === snapshot.fingerprint) {
+    if (markSent) return markProposalVersionSent(saved.id);
+    return saved;
+  }
+  return saveProposalVersion({ markSent });
+}
+
+function mailtoRecipients(value = "") {
+  return String(value)
+    .split(/[;,]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join(",");
+}
+
+function renderProposalVersions() {
+  if (!els.proposalVersionsList) return;
+  const versions = Array.isArray(state.proposalVersions) ? state.proposalVersions : [];
+  const sent = versions.find((version) => version.id === state.sentProposalVersionId);
+  els.proposalVersionStatus.textContent = sent
+    ? `Sent proposal: ${sent.versionName} (${sent.sentAtLabel || sent.createdAtLabel}).`
+    : versions.length
+      ? "No proposal version has been marked sent yet."
+      : "No saved proposal versions yet.";
+  els.proposalVersionsList.innerHTML = versions.length
+    ? versions
+        .map(
+          (version) => `
+            <article class="${version.id === state.sentProposalVersionId ? "sent" : ""}">
+              <div>
+                <strong>${escapeAttr(version.versionName)}</strong>
+                <span>${escapeAttr(version.createdAtLabel)} - ${money.format(version.totals?.total || 0)}</span>
+                ${version.sentAt ? `<small>Sent ${escapeAttr(version.sentAtLabel || "")}</small>` : ""}
+              </div>
+              <div class="estimate-version-actions">
+                <button class="secondary mini-button" type="button" data-use-proposal-version="${version.id}">Use in contract</button>
+                <button class="secondary mini-button" type="button" data-mark-proposal-sent="${version.id}">${version.id === state.sentProposalVersionId ? "Sent" : "Mark sent"}</button>
+              </div>
+            </article>
+          `,
+        )
+        .join("")
+    : `<p class="empty-note">Save a proposal version before sending it or using it in the contract.</p>`;
+}
+
+function emailProposalVersion() {
+  const version = ensureSavedProposalVersion({ markSent: true });
+  if (!version) return;
+  const recipients = outputState().emailRecipients || els.crmEmail?.value || "";
+  if (!recipients.trim()) {
+    els.proposalVersionStatus.textContent = "Add at least one email recipient before emailing the proposal.";
+    return;
+  }
+  const subject = `Proposal - ${version.projectName || els.projectName?.value || "Project"}`;
+  const body = [
+    `Hi ${version.customerName || els.customerName?.value || ""},`,
+    "",
+    `Please see the attached proposal PDF for ${version.projectName || "your project"}.`,
+    `Proposal version: ${version.versionName}`,
+    `Total: ${money.format(version.totals?.total || 0)}`,
+    "",
+    "This proposal has been saved and marked as sent in Build OS.",
+  ].join("\n");
+  els.proposalVersionStatus.textContent = "Save the proposal as a PDF from the print dialog, then attach it to the email draft.";
+  window.print();
+  setTimeout(() => {
+    window.location.href = `mailto:${mailtoRecipients(recipients)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }, 500);
+}
+
+function printProposalVersion() {
+  ensureSavedProposalVersion();
+  window.print();
 }
 
 function renderOutputScopeItems() {
@@ -4119,9 +4564,10 @@ function contractState() {
     if (state.contract.exclusions[item] === undefined) state.contract.exclusions[item] = true;
   });
   if (!state.contract.date) state.contract.date = todayIso();
-  if (!state.contract.estimateVersionId) state.contract.estimateVersionId = state.sentEstimateVersionId || state.estimateVersions?.[0]?.id || "current";
+  if (!state.contract.proposalVersionId) state.contract.proposalVersionId = state.sentProposalVersionId || state.proposalVersions?.[0]?.id || "current";
   if (!state.contract.customerName) state.contract.customerName = els.customerName?.value || "";
   if (!state.contract.location) state.contract.location = els.crmProjectAddress?.value || outputState().location || "";
+  if (!state.contract.emailRecipients) state.contract.emailRecipients = outputState().emailRecipients || els.crmEmail?.value || "";
   if (!state.contract.depositTerms) state.contract.depositTerms = "Deposit and payment schedule to be confirmed with Zak's Homes & Cottages prior to production start.";
   state.contract.approval = {
     status: state.contract.approval.status || "Pending review",
@@ -4149,7 +4595,7 @@ function contractApprovalSignature(estimate = selectedContractEstimate()) {
   const contract = contractState();
   return JSON.stringify({
     date: contract.date,
-    estimateVersionId: contract.estimateVersionId,
+    proposalVersionId: contract.proposalVersionId,
     estimateTotal: estimate.totals?.total || 0,
     customerName: contract.customerName,
     location: contract.location,
@@ -4216,33 +4662,76 @@ function printApprovedContract() {
   window.print();
 }
 
+function emailApprovedContract() {
+  if (!isContractApproved()) {
+    els.contractApprovalMessage.textContent = "Contract must be reviewed and approved before it can be emailed.";
+    return;
+  }
+  const contract = contractState();
+  const estimate = selectedContractEstimate();
+  const recipients = contract.emailRecipients || outputState().emailRecipients || els.crmEmail?.value || "";
+  if (!recipients.trim()) {
+    els.contractApprovalMessage.textContent = "Add at least one email recipient before emailing the contract.";
+    return;
+  }
+  contract.emailedAt = new Date().toISOString();
+  contract.emailedTo = recipients;
+  saveActiveCrmRecordEdits();
+  const subject = `Contract - ${estimate.projectName || els.projectName?.value || "Project"}`;
+  const body = [
+    `Hi ${contract.customerName || els.customerName?.value || ""},`,
+    "",
+    `Please see the attached approved contract PDF for ${estimate.projectName || "your project"}.`,
+    `Proposal version: ${estimate.versionName || "Current assembled proposal"}`,
+    `Contract amount: ${money.format(estimate.totals?.total || 0)}`,
+    "",
+    "This contract has been approved and recorded as emailed in Build OS.",
+  ].join("\n");
+  els.contractApprovalMessage.textContent = "Save the approved contract as a PDF from the print dialog, then attach it to the email draft.";
+  window.print();
+  setTimeout(() => {
+    window.location.href = `mailto:${mailtoRecipients(recipients)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }, 500);
+}
+
 function contractVersionOptions(selectedId) {
-  const currentSnapshot = estimateSnapshot();
+  const currentProposal = selectedProposalEstimate();
   return [
-    `<option value="current" ${selectedId === "current" ? "selected" : ""}>Current working estimate - ${money.format(currentSnapshot.totals.total)}</option>`,
-    ...(state.estimateVersions || []).map(
+    `<option value="current" ${selectedId === "current" ? "selected" : ""}>Current assembled proposal - ${money.format(currentProposal.totals.total)}</option>`,
+    ...(state.proposalVersions || []).map(
       (version) =>
-        `<option value="${escapeAttr(version.id)}" ${selectedId === version.id ? "selected" : ""}>${escapeAttr(version.versionName)} - ${money.format(version.totals.total)}</option>`,
+        `<option value="${escapeAttr(version.id)}" ${selectedId === version.id ? "selected" : ""}>${escapeAttr(version.versionName)} - ${money.format(version.totals?.total || 0)}</option>`,
     ),
   ].join("");
 }
 
 function selectedContractEstimate() {
   const contract = contractState();
-  const saved = state.estimateVersions?.find((version) => version.id === contract.estimateVersionId);
-  if (saved) return saved;
-  const snapshot = estimateSnapshot();
+  const savedProposal = state.proposalVersions?.find((version) => version.id === contract.proposalVersionId);
+  if (savedProposal) {
+    return {
+      ...(savedProposal.estimate || {}),
+      id: savedProposal.id,
+      versionName: savedProposal.versionName,
+      createdAtLabel: savedProposal.createdAtLabel,
+      customerName: savedProposal.customerName,
+      projectName: savedProposal.projectName,
+      projectType: savedProposal.projectType,
+      totals: savedProposal.totals || savedProposal.estimate?.totals || { cost: 0, retail: 0, pst: 0, gst: 0, total: 0 },
+      rtmTotals: savedProposal.estimate?.rtmTotals,
+      siteTotals: savedProposal.estimate?.siteTotals,
+      garageTotals: savedProposal.estimate?.garageTotals,
+      shouseTotals: savedProposal.estimate?.shouseTotals,
+      lines: savedProposal.contractLines || savedProposal.estimate?.lines || [],
+      fromProposalVersion: true,
+    };
+  }
+  const currentProposal = selectedProposalEstimate();
   return {
-    id: "current",
-    versionName: "Current working estimate",
+    ...currentProposal,
+    versionName: "Current assembled proposal",
     createdAtLabel: todayIso(),
-    customerName: els.customerName?.value || "",
-    projectName: els.projectName?.value || "",
-    projectType: els.projectType?.value || "",
-    totals: snapshot.totals,
-    rtmTotals: snapshot.rtmTotals,
-    siteTotals: snapshot.siteTotals,
-    lines: snapshot.lines,
+    lines: currentProposal.lines.filter((line) => line.includeContract !== false).concat(outputScopeLines("contract")),
   };
 }
 
@@ -4266,28 +4755,31 @@ function renderContract() {
   const splitTotals = estimateSplitTotals(estimate);
   const included = contractInclusionOptions.filter((item) => contract.inclusions[item]);
   const excluded = contractExclusionOptions.filter((item) => contract.exclusions[item]);
-  const activeLines = estimate.lines
+  const activeLines = (estimate.lines || [])
     .filter((line) => line.includeContract !== false)
-    .concat(outputScopeLines("contract"))
     .sort((a, b) => num(a.proposalSort, 9999) - num(b.proposalSort, 9999) || String(a.description).localeCompare(String(b.description)));
   const approved = isContractApproved();
   const staleApproval = contract.approval.status === "Approved" && !approved;
   const approvalDate = contract.approval.approvedAt ? new Date(contract.approval.approvedAt).toLocaleString("en-CA") : "";
   els.contractDate.value = contract.date;
-  els.contractEstimateVersion.innerHTML = contractVersionOptions(contract.estimateVersionId);
-  els.contractEstimateVersion.value = contract.estimateVersionId;
+  els.contractEstimateVersion.innerHTML = contractVersionOptions(contract.proposalVersionId);
+  els.contractEstimateVersion.value = contract.proposalVersionId;
   els.contractCustomerName.value = contract.customerName;
   els.contractLocation.value = contract.location;
   els.contractDepositTerms.value = contract.depositTerms;
   els.contractApprovalNote.value = contract.approval.note || "";
+  els.contractEmailRecipients.value = contract.emailRecipients || "";
   els.approveContractBtn.disabled = !canApproveContract() || approved;
   els.revokeContractApprovalBtn.disabled = !canApproveContract() || !approved;
   els.printContractBtn.disabled = !approved;
+  els.emailContractBtn.disabled = !approved;
   els.contractApprovalStatus.className = `contract-approval-status ${approved ? "approved" : "pending"}`;
   els.contractApprovalStatus.innerHTML = approved
     ? `<strong>Approved</strong><span>${escapeAttr(contract.approval.approvedBy)} (${escapeAttr(contract.approval.approvedRole)}) - ${escapeAttr(approvalDate)}</span>`
     : `<strong>${staleApproval ? "Approval needs review" : "Pending owner review"}</strong><span>Printing and email are locked until an owner or upper management approves this contract.</span>`;
-  els.contractApprovalMessage.textContent = approved ? "Approved contract is unlocked for print/save PDF." : "Review and sign-off required before print/save PDF or email.";
+  els.contractApprovalMessage.textContent = approved
+    ? "Approved contract is unlocked for print/save PDF and email."
+    : "Review and sign-off required before print/save PDF or email.";
   renderContractChecklist(els.contractInclusions, contractInclusionOptions, contract.inclusions, "data-contract-include");
   renderContractChecklist(els.contractExclusions, contractExclusionOptions, contract.exclusions, "data-contract-exclude");
 
@@ -4318,16 +4810,18 @@ function renderContract() {
       <div><dt>Project:</dt><dd>${escapeAttr(estimate.projectName || els.projectName?.value || "Project")}</dd></div>
       <div><dt>Location:</dt><dd>${escapeAttr(contract.location || "Not set")}</dd></div>
       <div><dt>Contract date:</dt><dd>${escapeAttr(prettyDate(contract.date))}</dd></div>
-      <div><dt>Estimate version:</dt><dd>${escapeAttr(estimate.versionName)}</dd></div>
+      <div><dt>Proposal version:</dt><dd>${escapeAttr(estimate.versionName)}</dd></div>
       <div><dt>RTM amount:</dt><dd>${escapeAttr(money.format(splitTotals.rtm.total))}</dd></div>
       <div><dt>Site amount:</dt><dd>${escapeAttr(money.format(splitTotals.site.total))}</dd></div>
+      <div><dt>Garage focus:</dt><dd>${escapeAttr(money.format(splitTotals.garage.total))}</dd></div>
+      <div><dt>Shouse amount:</dt><dd>${escapeAttr(money.format(splitTotals.shouse.total))}</dd></div>
       <div><dt>Contract amount:</dt><dd>${escapeAttr(money.format(estimate.totals.total))}</dd></div>
       <div><dt>Approval:</dt><dd>${approved ? `${escapeAttr(contract.approval.approvedBy)} - ${escapeAttr(approvalDate)}` : "Pending owner review"}</dd></div>
     </dl>
     ${approved ? "" : `<div class="contract-watermark">Pending approval - not for signature or distribution</div>`}
     <section class="proposal-section">
       <h4>Agreement Summary</h4>
-      <p>Zak's Homes & Cottages agrees to provide the work selected in this contract and the attached estimate version, subject to final approvals, selections, site conditions, and written change orders.</p>
+      <p>Zak's Homes & Cottages agrees to provide the work selected in this contract and the attached proposal version, subject to final approvals, selections, site conditions, and written change orders.</p>
       <p>${escapeAttr(contract.depositTerms)}</p>
     </section>
     <section class="proposal-section">
@@ -4337,8 +4831,8 @@ function renderContract() {
   `;
   const pageTwo = `
     <section class="proposal-section">
-      <h4>Estimate Included In Contract</h4>
-      <p>This contract uses ${escapeAttr(estimate.versionName)} as the attached estimate schedule.</p>
+      <h4>Proposal Included In Contract</h4>
+      <p>This contract uses ${escapeAttr(estimate.versionName)} as the attached proposal schedule.</p>
       <table class="estimate-version-lines contract-estimate-table">
         <thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead>
         <tbody>${estimateRows || `<tr><td colspan="4">No estimate lines selected.</td></tr>`}</tbody>
@@ -4370,6 +4864,17 @@ function handleOutputEdit(event) {
     handleOutputScopeItemEdit(event);
     return;
   }
+  if (event.target.dataset.outputEstimateAddon) {
+    const estimateId = event.target.dataset.outputEstimateAddon;
+    const selected = new Set(output.additionalEstimateVersionIds || []);
+    if (event.target.checked) selected.add(estimateId);
+    else selected.delete(estimateId);
+    selected.delete(output.estimateVersionId);
+    output.additionalEstimateVersionIds = [...selected];
+    renderEstimateOutput();
+    saveActiveCrmRecordEdits();
+    return;
+  }
   if (event.target.dataset.outputDescription) {
     output.descriptions[event.target.dataset.outputDescription] = event.target.value;
     output.descriptionsManual[event.target.dataset.outputDescription] = true;
@@ -4381,6 +4886,7 @@ function handleOutputEdit(event) {
     outputEstimateVersion: "estimateVersionId",
     outputEstimateDate: "estimateDate",
     outputProvidedBy: "providedBy",
+    outputEmailRecipients: "emailRecipients",
     outputLocation: "location",
     outputIntro: "intro",
     outputMovingNotes: "movingNotes",
@@ -4389,6 +4895,9 @@ function handleOutputEdit(event) {
   const field = fieldMap[event.target.id];
   if (!field) return;
   output[field] = event.target.value;
+  if (field === "estimateVersionId") {
+    output.additionalEstimateVersionIds = (output.additionalEstimateVersionIds || []).filter((id) => id !== output.estimateVersionId);
+  }
   if (field !== "estimateVersionId") output.manual[field] = true;
   if (event.type === "change") renderEstimateOutput();
   saveActiveCrmRecordEdits();
@@ -4412,9 +4921,10 @@ function handleContractEdit(event) {
   }
   const fieldMap = {
     contractDate: "date",
-    contractEstimateVersion: "estimateVersionId",
+    contractEstimateVersion: "proposalVersionId",
     contractCustomerName: "customerName",
     contractLocation: "location",
+    contractEmailRecipients: "emailRecipients",
     contractDepositTerms: "depositTerms",
     contractApprovalNote: "approvalNote",
   };
@@ -4422,6 +4932,8 @@ function handleContractEdit(event) {
   if (!field) return;
   if (field === "approvalNote") {
     contract.approval.note = event.target.value;
+  } else if (field === "emailRecipients") {
+    contract[field] = event.target.value;
   } else {
     resetContractApproval();
     contract[field] = event.target.value;
@@ -4707,6 +5219,7 @@ function createScheduleItems(startDate = todayIso()) {
     trade: item.trade || item.department,
     subtrade: "",
     purchaseOrderId: "",
+    dependsOn: index > 0 ? `schedule-${index}` : "",
     addedBy,
     flagged: false,
     flagNote: "",
@@ -4722,6 +5235,8 @@ function ensureSchedule() {
   if (!state.schedule.owner) state.schedule.owner = "Production";
   if (!state.schedule.scope) state.schedule.scope = "current";
   if (!state.schedule.tradeFilter) state.schedule.tradeFilter = "All trades";
+  if (!["calendar", "gantt"].includes(state.schedule.viewMode)) state.schedule.viewMode = "calendar";
+  if (!["project", "date"].includes(state.schedule.ganttSort)) state.schedule.ganttSort = "project";
   if (!Array.isArray(state.schedule.items) || !state.schedule.items.length) {
     state.schedule.items = createScheduleItems(state.schedule.startDate);
   }
@@ -4729,6 +5244,8 @@ function ensureSchedule() {
     if (!item.trade) item.trade = item.department || "Production";
     if (item.subtrade === undefined) item.subtrade = "";
     if (item.purchaseOrderId === undefined) item.purchaseOrderId = "";
+    if (item.dependsOn === undefined) item.dependsOn = "";
+    if (item.dependsOn === item.id || !state.schedule.items.some((entry) => entry.id === item.dependsOn)) item.dependsOn = "";
     if (!item.addedBy) item.addedBy = "Unknown";
     if (item.flagged === undefined) item.flagged = false;
     if (item.flagNote === undefined) item.flagNote = "";
@@ -4749,6 +5266,8 @@ function applyScheduleTemplate() {
   state.schedule.selectedItemId = state.schedule.items[0]?.id || "";
   state.schedule.scope = els.scheduleScope.value || "current";
   state.schedule.tradeFilter = els.scheduleTradeFilter.value || "All trades";
+  state.schedule.viewMode = els.scheduleViewMode.value || "calendar";
+  state.schedule.ganttSort = els.scheduleGanttSort.value || "project";
   render();
 }
 
@@ -4974,6 +5493,16 @@ function schedulePurchaseOrderOptionsHtml(item) {
   ].join("");
 }
 
+function scheduleDependencyOptionsHtml(item) {
+  const selectedId = item?.dependsOn || "";
+  return [
+    `<option value="" ${selectedId ? "" : "selected"}>No dependency</option>`,
+    ...state.schedule.items
+      .filter((entry) => entry.id !== item?.id)
+      .map((entry) => `<option value="${escapeAttr(entry.id)}" ${selectedId === entry.id ? "selected" : ""}>${escapeAttr(entry.name || "Schedule item")} - ${prettyDate(entry.targetDate)}</option>`),
+  ].join("");
+}
+
 function calendarItems() {
   const filter = parseScheduleFilter(state.schedule.tradeFilter);
   return calendarProjectRecords().flatMap((record) =>
@@ -4991,6 +5520,7 @@ function calendarItems() {
         projectName: record.projectName || "Project",
         purchaseOrderNumbers: scheduleItemPurchaseOrders(record, item).map((order) => order.number),
         isCurrentProject: record.id === (state.crm.activeRecordId || "current") || record.id === "current",
+        dependsOn: item.dependsOn || "",
       })),
   );
 }
@@ -5019,6 +5549,15 @@ function scheduleItemForProject(projectId, itemId) {
   const schedule = scheduleForProject(projectId);
   const item = schedule?.items?.find((entry) => entry.id === itemId);
   return { schedule, item };
+}
+
+function toggleGanttComplete(projectId, itemId) {
+  const { schedule, item } = scheduleItemForProject(projectId, itemId);
+  if (!schedule || !item) return;
+  item.status = item.status === "Complete" ? "Not started" : "Complete";
+  schedule.selectedItemId = item.id;
+  persistScheduleProject(projectId);
+  renderSchedule();
 }
 
 function persistScheduleProject(projectId) {
@@ -5183,6 +5722,27 @@ function calendarDateFromWeekPointer(weekRow, clientX) {
   return days[column]?.dataset.calendarDate || "";
 }
 
+function ganttDateFromPointer(ganttRow, clientX) {
+  if (!ganttRow) return "";
+  const timeline = ganttRow.matches?.("[data-gantt-timeline]") ? ganttRow : ganttRow.closest?.("[data-gantt-timeline]") || ganttRow;
+  const days = Array.from(timeline.querySelectorAll('[data-gantt-row-index="1"][data-gantt-date]'));
+  if (!days.length) return "";
+  const rect = timeline.getBoundingClientRect();
+  const timelineWidth = Math.max(1, rect.width);
+  const column = Math.min(days.length - 1, Math.max(0, Math.floor(((clientX - rect.left) / timelineWidth) * days.length)));
+  return days[column]?.dataset.ganttDate || "";
+}
+
+function ganttDateFromViewportPoint(clientX, clientY, fallbackRow = null) {
+  const target = document.elementFromPoint(clientX, clientY);
+  const directDay = target?.closest?.("[data-gantt-date]");
+  if (directDay?.dataset.ganttDate) return directDay.dataset.ganttDate;
+  const directRow = target?.closest?.(".gantt-row, [data-gantt-timeline]");
+  if (directRow) return ganttDateFromPointer(directRow, clientX);
+  if (fallbackRow) return ganttDateFromPointer(fallbackRow, clientX);
+  return "";
+}
+
 function highlightCalendarDropDay(event) {
   document.querySelectorAll("[data-calendar-date]").forEach((day) => day.classList.remove("drag-over"));
   const dateText = calendarDateFromPointer(event);
@@ -5194,10 +5754,12 @@ function beginScheduleResize(event) {
   if (state.schedule.resizeDrag) return true;
   let handle = event.target.closest("[data-schedule-resize]");
   let scheduleEvent = handle?.closest("[data-schedule-event]");
+  if (handle?.closest(".gantt-bar")) scheduleEvent = handle.closest(".gantt-bar");
   let edge = handle?.dataset.scheduleResize || "";
   if (!handle) {
     scheduleEvent = event.target.closest("[data-schedule-event]");
     if (!scheduleEvent || scheduleEvent.closest("[data-calendar-more]")) return false;
+    if (scheduleEvent.closest(".gantt-row") && !scheduleEvent.classList.contains("gantt-bar")) return false;
     const rect = scheduleEvent.getBoundingClientRect();
     const edgeZone = Math.min(28, rect.width * 0.28);
     if (event.clientX - rect.left <= edgeZone) edge = "start";
@@ -5206,7 +5768,8 @@ function beginScheduleResize(event) {
     handle = scheduleEvent.querySelector(`[data-schedule-resize="${edge}"]`) || scheduleEvent;
   }
   const weekRow = scheduleEvent?.closest("[data-calendar-week]");
-  if (!weekRow) return false;
+  const ganttRow = scheduleEvent?.closest(".gantt-row, [data-gantt-timeline]");
+  if (!weekRow && !ganttRow) return false;
   event.preventDefault();
   event.stopPropagation();
   state.schedule.resizeDrag = {
@@ -5214,8 +5777,10 @@ function beginScheduleResize(event) {
     itemId: scheduleEvent.dataset.scheduleEvent,
     projectId: scheduleEvent.dataset.scheduleProject,
     weekRow,
+    ganttRow,
+    timeline: ganttRow ? "gantt" : "calendar",
     pointerId: event.pointerId ?? null,
-    lastDate: calendarDateFromViewportPoint(event.clientX, event.clientY, weekRow),
+    lastDate: ganttRow ? ganttDateFromViewportPoint(event.clientX, event.clientY, ganttRow) : calendarDateFromViewportPoint(event.clientX, event.clientY, weekRow),
   };
   try {
     if (event.pointerId !== undefined) handle.setPointerCapture?.(event.pointerId);
@@ -5223,7 +5788,7 @@ function beginScheduleResize(event) {
     // Some browsers only allow pointer capture during trusted pointer events.
   }
   document.body.classList.add("schedule-resizing");
-  highlightCalendarResizeDate(weekRow, event.clientX);
+  highlightScheduleResizeDate(state.schedule.resizeDrag, event.clientX, event.clientY);
   return true;
 }
 
@@ -5231,26 +5796,44 @@ function beginScheduleMove(event) {
   if (state.schedule.resizeDrag || state.schedule.moveDrag || event.target.closest("[data-schedule-resize]")) return false;
   const scheduleEvent = event.target.closest("[data-schedule-event]");
   const weekRow = scheduleEvent?.closest("[data-calendar-week]");
-  if (!scheduleEvent || !weekRow || scheduleEvent.closest("[data-calendar-more]")) return false;
+  const ganttRow = scheduleEvent?.closest(".gantt-row, [data-gantt-timeline]");
+  if (!scheduleEvent || (!weekRow && !ganttRow) || scheduleEvent.closest("[data-calendar-more]")) return false;
+  if (ganttRow && !scheduleEvent.classList.contains("gantt-bar")) return false;
   event.preventDefault();
   state.schedule.moveDrag = {
     itemId: scheduleEvent.dataset.scheduleEvent,
     projectId: scheduleEvent.dataset.scheduleProject,
     weekRow,
+    ganttRow,
+    timeline: ganttRow ? "gantt" : "calendar",
     startX: event.clientX,
     startY: event.clientY,
     moved: false,
   };
   scheduleEvent.classList.add("dragging");
-  highlightCalendarResizeDate(weekRow, event.clientX);
+  highlightScheduleResizeDate(state.schedule.moveDrag, event.clientX, event.clientY);
   return true;
 }
 
-function highlightCalendarResizeDate(weekRow, clientX, clientY = null) {
+function clearScheduleDragHighlights() {
   document.querySelectorAll("[data-calendar-date]").forEach((day) => day.classList.remove("drag-over"));
-  const dateText = clientY === null ? calendarDateFromWeekPointer(weekRow, clientX) : calendarDateFromViewportPoint(clientX, clientY, weekRow);
-  const targetDay = dateText ? document.querySelector(`[data-calendar-date="${dateText}"]`) : null;
-  targetDay?.classList.add("drag-over");
+  document.querySelectorAll("[data-gantt-date]").forEach((day) => day.classList.remove("drag-over"));
+}
+
+function highlightScheduleResizeDate(drag, clientX, clientY = null) {
+  clearScheduleDragHighlights();
+  const dateText =
+    drag?.timeline === "gantt"
+      ? ganttDateFromViewportPoint(clientX, clientY ?? 0, drag.ganttRow)
+      : clientY === null
+        ? calendarDateFromWeekPointer(drag.weekRow, clientX)
+        : calendarDateFromViewportPoint(clientX, clientY, drag.weekRow);
+  if (drag?.timeline === "gantt") {
+    document.querySelectorAll(`[data-gantt-date="${dateText}"]`).forEach((day) => day.classList.add("drag-over"));
+  } else {
+    const targetDay = dateText ? document.querySelector(`[data-calendar-date="${dateText}"]`) : null;
+    targetDay?.classList.add("drag-over");
+  }
   return dateText;
 }
 
@@ -5258,7 +5841,7 @@ function updateScheduleResize(event) {
   const drag = state.schedule.resizeDrag;
   if (!drag) return;
   event.preventDefault();
-  drag.lastDate = highlightCalendarResizeDate(drag.weekRow, event.clientX, event.clientY) || drag.lastDate;
+  drag.lastDate = highlightScheduleResizeDate(drag, event.clientX, event.clientY) || drag.lastDate;
 }
 
 function updateScheduleMove(event) {
@@ -5266,17 +5849,20 @@ function updateScheduleMove(event) {
   if (!drag) return;
   event.preventDefault();
   if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) drag.moved = true;
-  highlightCalendarResizeDate(drag.weekRow, event.clientX);
+  highlightScheduleResizeDate(drag, event.clientX, event.clientY);
 }
 
 function finishScheduleResize(event) {
   const drag = state.schedule.resizeDrag;
   if (!drag) return;
   event.preventDefault();
-  const dateText = calendarDateFromViewportPoint(event.clientX, event.clientY, drag.weekRow) || drag.lastDate;
+  const dateText =
+    drag.timeline === "gantt"
+      ? ganttDateFromViewportPoint(event.clientX, event.clientY, drag.ganttRow) || drag.lastDate
+      : calendarDateFromViewportPoint(event.clientX, event.clientY, drag.weekRow) || drag.lastDate;
   state.schedule.resizeDrag = null;
   document.body.classList.remove("schedule-resizing");
-  document.querySelectorAll("[data-calendar-date]").forEach((day) => day.classList.remove("drag-over"));
+  clearScheduleDragHighlights();
   if (dateText) resizeScheduleItemToDate(drag.projectId, drag.itemId, drag.edge, dateText);
 }
 
@@ -5284,9 +5870,10 @@ function finishScheduleMove(event) {
   const drag = state.schedule.moveDrag;
   if (!drag) return false;
   event.preventDefault();
-  const dateText = calendarDateFromWeekPointer(drag.weekRow, event.clientX);
+  const dateText =
+    drag.timeline === "gantt" ? ganttDateFromViewportPoint(event.clientX, event.clientY, drag.ganttRow) : calendarDateFromWeekPointer(drag.weekRow, event.clientX);
   document.querySelectorAll("[data-schedule-event]").forEach((item) => item.classList.remove("dragging"));
-  document.querySelectorAll("[data-calendar-date]").forEach((day) => day.classList.remove("drag-over"));
+  clearScheduleDragHighlights();
   state.schedule.moveDrag = null;
   if (drag.moved && dateText) {
     moveScheduleItemToDate(drag.projectId, drag.itemId, dateText);
@@ -5387,6 +5974,10 @@ function renderDayEvents(dateText, dayItems) {
 function renderScheduleCalendar() {
   if (!els.scheduleCalendar) return;
   ensureSchedule();
+  const isGantt = state.schedule.viewMode === "gantt";
+  els.scheduleCalendar.toggleAttribute("hidden", isGantt);
+  els.scheduleCalendarWeekdays?.toggleAttribute("hidden", isGantt);
+  els.scheduleGantt?.toggleAttribute("hidden", !isGantt);
   const [year, month] = state.schedule.calendarMonth.split("-").map(Number);
   const first = new Date(year, month - 1, 1);
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -5394,10 +5985,14 @@ function renderScheduleCalendar() {
   const totalCells = Math.ceil((leadingDays + daysInMonth) / 7) * 7;
   const today = todayIso();
   const visibleItems = calendarItems();
-  els.scheduleCalendarTitle.textContent = monthTitle(state.schedule.calendarMonth);
+  els.scheduleCalendarTitle.textContent = isGantt ? `Gantt - ${monthTitle(state.schedule.calendarMonth)}` : monthTitle(state.schedule.calendarMonth);
   els.scheduleCalendarSubtitle.textContent = `${
     state.schedule.scope === "all" ? "All saved projects" : currentProjectName()
   } - ${parseScheduleFilter(state.schedule.tradeFilter).label}`;
+  if (isGantt) {
+    renderScheduleGantt(visibleItems);
+    return;
+  }
 
   els.scheduleCalendar.innerHTML = Array.from({ length: totalCells / 7 }, (_, weekIndex) => {
     const weekDates = weekDatesForCalendar(state.schedule.calendarMonth, weekIndex * 7);
@@ -5423,12 +6018,168 @@ function renderScheduleCalendar() {
   }).join("");
 }
 
+function renderScheduleGantt(visibleItems = calendarItems()) {
+  if (!els.scheduleGantt) return;
+  const startDate = `${state.schedule.calendarMonth}-01`;
+  const days = Array.from({ length: 42 }, (_, index) => addDaysIso(startDate, index));
+  const timelineEnd = days[days.length - 1];
+  const sortMode = state.schedule.ganttSort || "project";
+  const items = visibleItems
+    .filter((item) => (item.targetDate || "") <= timelineEnd && (item.endDate || item.targetDate || "") >= startDate)
+    .sort(
+      (a, b) =>
+        (sortMode === "date"
+          ? String(a.targetDate || "").localeCompare(String(b.targetDate || "")) || String(a.projectName || "").localeCompare(String(b.projectName || ""))
+          : String(a.projectName || "").localeCompare(String(b.projectName || "")) || String(a.targetDate || "").localeCompare(String(b.targetDate || ""))) ||
+        String(a.name || "").localeCompare(String(b.name || "")),
+    );
+  const gridStyle = `grid-template-columns: minmax(300px, 340px) repeat(${days.length}, minmax(22px, 1fr));`;
+  const compactRowHeight = 42;
+  const expandedRowHeight = 220;
+  const positioned = items.map((item, rowIndex) => {
+    const itemStart = item.targetDate < startDate ? startDate : item.targetDate;
+    const itemEnd = (item.endDate || item.targetDate) > timelineEnd ? timelineEnd : item.endDate || item.targetDate;
+    const startColumn = Math.max(0, dayDiff(startDate, itemStart)) + 2;
+    const endColumn = Math.max(startColumn + 1, dayDiff(startDate, itemEnd) + 3);
+    return { item, rowIndex, startColumn, endColumn };
+  });
+  const rowSizes = positioned.map(({ item }) => (state.schedule.editorOpen && item.id === state.schedule.selectedItemId && item.isCurrentProject ? expandedRowHeight : compactRowHeight));
+  const rowTemplate = rowSizes.length ? rowSizes.map((height) => `${height}px`).join(" ") : `${compactRowHeight}px`;
+  const timelineGridStyle = `grid-template-columns: repeat(${days.length}, minmax(22px, 1fr)); grid-template-rows: ${rowTemplate};`;
+  const labelGridStyle = `grid-template-rows: ${rowTemplate};`;
+  const totalTimelineHeight = rowSizes.reduce((sum, height) => sum + height, 0) || compactRowHeight;
+  const rowCenterPercent = (rowIndex) => {
+    const before = rowSizes.slice(0, rowIndex).reduce((sum, height) => sum + height, 0);
+    return ((before + rowSizes[rowIndex] / 2) / totalTimelineHeight) * 100;
+  };
+  const dependencyPaths = positioned
+    .map((item, rowIndex) => {
+      const { item: ganttItem, startColumn } = item;
+      const predecessor = ganttItem.dependsOn
+        ? positioned.find((entry) => entry.item.id === ganttItem.dependsOn && entry.item.projectId === ganttItem.projectId)
+        : null;
+      if (!predecessor) return "";
+      const sourceX = ((predecessor.endColumn - 2) / days.length) * 100;
+      const targetX = ((startColumn - 2) / days.length) * 100;
+      const sourceY = rowCenterPercent(predecessor.rowIndex);
+      const targetY = rowCenterPercent(rowIndex);
+      return `<path d="M ${sourceX.toFixed(3)} ${sourceY.toFixed(3)} V ${targetY.toFixed(3)} H ${targetX.toFixed(3)}" marker-end="url(#ganttDependencyArrow)" />`;
+    })
+    .join("");
+  const headerCells = days
+    .map((dateText, index) => {
+      const date = new Date(`${dateText}T00:00:00`);
+      const day = date.getDay();
+      const isWeekend = day === 0 || day === 6;
+      const isWeekStart = index === 0 || day === 0;
+      return `<span class="${isWeekStart ? "week-start" : ""} ${isWeekend ? "weekend" : ""}"><b>${date.getDate()}</b><small>${["S", "M", "T", "W", "T", "F", "S"][day]}</small></span>`;
+    })
+    .join("");
+  const rowDayCells = (rowIndex) =>
+    days
+      .map((dateText, index) => {
+      const day = new Date(`${dateText}T00:00:00`).getDay();
+      const isWeekend = day === 0 || day === 6;
+      return `<span class="gantt-day-cell ${isWeekend ? "weekend" : ""}" style="grid-column: ${index + 1} / ${index + 2}; grid-row: ${rowIndex + 1};" data-gantt-date="${dateText}" data-gantt-row-index="${rowIndex + 1}" aria-hidden="true"></span>`;
+      })
+      .join("");
+  const ganttDateOptionsHtml = (selectedDate) => {
+    const optionDates = days.includes(selectedDate) || !selectedDate ? days : [selectedDate, ...days];
+    return optionDates.map((dateText) => `<option value="${dateText}" ${dateText === selectedDate ? "selected" : ""}>${prettyDate(dateText)}</option>`).join("");
+  };
+  els.scheduleGantt.innerHTML = `
+    <div class="gantt-grid gantt-head" style="${gridStyle}">
+      <strong>Project / schedule item</strong>
+      ${headerCells}
+    </div>
+    <div class="gantt-body gantt-overlay-body">
+      ${
+        positioned.length
+          ? `
+              <div class="gantt-overlay-labels" style="${labelGridStyle}">
+                ${positioned
+                  .map(({ item: ganttItem }, rowIndex) => {
+                    const rowLabel = `${ganttItem.name || ganttItem.trade || "Schedule item"} - ${ganttItem.projectName || "Project"}`;
+                    const isExpanded = state.schedule.editorOpen && ganttItem.id === state.schedule.selectedItemId && ganttItem.isCurrentProject;
+                    return `
+                    <div class="gantt-row-label gantt-overlay-label ${isExpanded ? "is-expanded" : ""}" style="grid-row: ${rowIndex + 1};" data-schedule-event="${ganttItem.id}" data-schedule-project="${escapeAttr(ganttItem.projectId)}">
+                      <button class="gantt-row-title" type="button" data-schedule-event="${ganttItem.id}" data-schedule-project="${escapeAttr(ganttItem.projectId)}">
+                        <span class="gantt-check ${ganttItem.status === "Complete" ? "checked" : ""}" role="checkbox" aria-checked="${ganttItem.status === "Complete" ? "true" : "false"}" data-gantt-complete="${ganttItem.id}" data-schedule-project="${escapeAttr(ganttItem.projectId)}"></span>
+                        <strong>${escapeAttr(rowLabel)}</strong>
+                      </button>
+                      ${
+                        isExpanded
+                          ? `<div class="gantt-inline-editor" data-gantt-inline-editor data-schedule-project="${escapeAttr(ganttItem.projectId)}" data-schedule-event="${ganttItem.id}">
+                              <label>
+                                Title
+                                <input data-gantt-inline-field="name" value="${escapeAttr(ganttItem.name || "")}" />
+                              </label>
+                              <div class="gantt-inline-dates">
+                                <label>
+                                  Start
+                                  <select data-gantt-inline-field="targetDate">${ganttDateOptionsHtml(ganttItem.targetDate)}</select>
+                                </label>
+                                <label>
+                                  End
+                                  <select data-gantt-inline-field="endDate">${ganttDateOptionsHtml(ganttItem.endDate || ganttItem.targetDate)}</select>
+                                </label>
+                              </div>
+                            </div>`
+                          : ""
+                      }
+                    </div>
+                    `;
+                  })
+                  .join("")}
+              </div>
+              <div class="gantt-timeline-grid" style="${timelineGridStyle}" data-gantt-timeline>
+                ${positioned.map((_, rowIndex) => rowDayCells(rowIndex)).join("")}
+                ${
+                  dependencyPaths
+                    ? `<svg class="gantt-dependency-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                        <defs>
+                          <marker id="ganttDependencyArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z"></path>
+                          </marker>
+                        </defs>
+                        ${dependencyPaths}
+                      </svg>`
+                    : ""
+                }
+                ${positioned
+                  .map((item, rowIndex) => {
+                    const { item: ganttItem, startColumn, endColumn } = item;
+                    const poLabel = ganttItem.purchaseOrderNumbers?.length ? ` - ${ganttItem.purchaseOrderNumbers.join(", ")}` : "";
+                    const label = `${ganttItem.projectName || "Project"}${ganttItem.name ? ` - ${ganttItem.name}` : ""}${poLabel}`;
+                    const timelineLabel = `${ganttItem.name || ganttItem.trade || "Schedule item"} - ${ganttItem.projectName || "Project"}`;
+                    const barClass = ganttItem.status === "Complete" ? "complete" : ganttItem.status === "Waiting" ? "waiting" : "active-work";
+                    return `
+                    <strong class="gantt-bar ${barClass} ${ganttItem.flagged ? "flagged-event" : ""} ${ganttItem.id === state.schedule.selectedItemId && ganttItem.isCurrentProject ? "active" : ""}" style="grid-column: ${startColumn - 1} / ${endColumn - 1}; grid-row: ${rowIndex + 1}; --event-color: ${projectColor(ganttItem.projectId)};" data-schedule-event="${ganttItem.id}" data-schedule-project="${escapeAttr(ganttItem.projectId)}" title="${escapeAttr(label)}">
+                      <button class="event-resize-handle event-resize-start gantt-resize-handle" type="button" data-schedule-resize="start" data-schedule-event="${ganttItem.id}" data-schedule-project="${escapeAttr(ganttItem.projectId)}" title="Drag or click, then choose a date"></button>
+                      <span class="sr-only">${escapeAttr(ganttItem.name || ganttItem.trade || "Schedule item")}</span>
+                      <button class="event-resize-handle event-resize-end gantt-resize-handle" type="button" data-schedule-resize="end" data-schedule-event="${ganttItem.id}" data-schedule-project="${escapeAttr(ganttItem.projectId)}" title="Drag or click, then choose a date"></button>
+                    </strong>
+                    <button class="gantt-bar-label" type="button" style="grid-column: ${endColumn - 1} / span 8; grid-row: ${rowIndex + 1};" data-schedule-event="${ganttItem.id}" data-schedule-project="${escapeAttr(ganttItem.projectId)}" title="${escapeAttr(label)}">
+                      ${ganttItem.flagged ? `<b class="schedule-flag-badge">FLAG</b>` : ""}${escapeAttr(timelineLabel)}
+                    </button>
+                    `;
+                  })
+                  .join("")}
+              </div>
+            `
+          : `<p class="empty-note">No schedule items in this Gantt range.</p>`
+      }
+    </div>
+  `;
+}
+
 function renderSchedule() {
-  if (!els.scheduleBody) return;
   ensureSchedule();
   els.scheduleStartDate.value = state.schedule.startDate;
   els.scheduleOwner.value = state.schedule.owner;
   els.scheduleScope.value = state.schedule.scope || "current";
+  els.scheduleViewMode.value = state.schedule.viewMode || "calendar";
+  els.scheduleGanttSort.value = state.schedule.ganttSort || "project";
   els.scheduleTradeFilter.innerHTML = scheduleTradeFilterOptionsHtml(state.schedule.tradeFilter);
   els.scheduleTradeFilter.value = normalizedScheduleFilterValue(state.schedule.tradeFilter);
   els.scheduleEditProjectName.innerHTML = projectOptionsHtml(state.crm.activeRecordId || "current");
@@ -5436,43 +6187,46 @@ function renderSchedule() {
   els.scheduleEditTrade.innerHTML = tradeOptionsHtml(selectedForEditor?.trade || "Framing");
   els.scheduleEditSubtrade.innerHTML = scheduleSubtradeOptionsHtml(selectedForEditor?.subtrade || "", selectedForEditor?.trade || selectedForEditor?.department || "Framing");
   els.scheduleEditPurchaseOrder.innerHTML = schedulePurchaseOrderOptionsHtml(selectedForEditor);
+  els.scheduleEditDependsOn.innerHTML = scheduleDependencyOptionsHtml(selectedForEditor);
   renderScheduleCalendar();
 
   const statuses = ["Not started", "In progress", "Waiting", "Complete"];
-  els.scheduleBody.innerHTML = state.schedule.items
-    .map(
-      (item) => `
-        <tr class="${item.flagged ? "flagged-schedule-row" : ""}" data-schedule-item="${item.id}">
-          <td>${item.flagged ? `<span class="schedule-flag-badge">FLAG</span>` : ""}<input data-schedule-field="name" value="${escapeAttr(item.name)}" /></td>
-          <td>
-            <select data-schedule-field="department">
-              ${["Sales", "Office", "Production", "Owners", "Accounting"]
-                .map((department) => `<option ${item.department === department ? "selected" : ""}>${department}</option>`)
-                .join("")}
-            </select>
-          </td>
-          <td>
-            <select data-schedule-field="trade">
-              ${tradeOptionsHtml(item.trade || item.department)}
-            </select>
-          </td>
-          <td>
-            <select data-schedule-field="subtrade">
-              ${scheduleSubtradeOptionsHtml(item.subtrade || "", item.trade || item.department)}
-            </select>
-          </td>
-          <td><input data-schedule-field="targetDate" type="date" value="${item.targetDate || ""}" /></td>
-          <td><input data-schedule-field="endDate" type="date" value="${item.endDate || item.targetDate || ""}" /></td>
-          <td>
-            <select data-schedule-field="status">
-              ${statuses.map((status) => `<option ${item.status === status ? "selected" : ""}>${status}</option>`).join("")}
-            </select>
-          </td>
-          <td><input data-schedule-field="notes" value="${escapeAttr(item.notes)}" placeholder="Schedule notes" /></td>
-        </tr>
-      `,
-    )
-    .join("");
+  if (els.scheduleBody) {
+    els.scheduleBody.innerHTML = state.schedule.items
+      .map(
+        (item) => `
+          <tr class="${item.flagged ? "flagged-schedule-row" : ""}" data-schedule-item="${item.id}">
+            <td>${item.flagged ? `<span class="schedule-flag-badge">FLAG</span>` : ""}<input data-schedule-field="name" value="${escapeAttr(item.name)}" /></td>
+            <td>
+              <select data-schedule-field="department">
+                ${["Sales", "Office", "Production", "Owners", "Accounting"]
+                  .map((department) => `<option ${item.department === department ? "selected" : ""}>${department}</option>`)
+                  .join("")}
+              </select>
+            </td>
+            <td>
+              <select data-schedule-field="trade">
+                ${tradeOptionsHtml(item.trade || item.department)}
+              </select>
+            </td>
+            <td>
+              <select data-schedule-field="subtrade">
+                ${scheduleSubtradeOptionsHtml(item.subtrade || "", item.trade || item.department)}
+              </select>
+            </td>
+            <td><input data-schedule-field="targetDate" type="date" value="${item.targetDate || ""}" /></td>
+            <td><input data-schedule-field="endDate" type="date" value="${item.endDate || item.targetDate || ""}" /></td>
+            <td>
+              <select data-schedule-field="status">
+                ${statuses.map((status) => `<option ${item.status === status ? "selected" : ""}>${status}</option>`).join("")}
+              </select>
+            </td>
+            <td><input data-schedule-field="notes" value="${escapeAttr(item.notes)}" placeholder="Schedule notes" /></td>
+          </tr>
+        `,
+      )
+      .join("");
+  }
 
   const openItems = state.schedule.items.filter((item) => item.status !== "Complete");
   const completed = state.schedule.items.length - openItems.length;
@@ -5511,6 +6265,8 @@ function renderSchedule() {
     els.scheduleEditSubtrade.value = selected.subtrade || "";
     els.scheduleEditPurchaseOrder.innerHTML = schedulePurchaseOrderOptionsHtml(selected);
     els.scheduleEditPurchaseOrder.value = selected.purchaseOrderId || "";
+    els.scheduleEditDependsOn.innerHTML = scheduleDependencyOptionsHtml(selected);
+    els.scheduleEditDependsOn.value = selected.dependsOn || "";
     els.scheduleEditAddedBy.value = selected.addedBy || "Unknown";
     els.scheduleEditDate.value = selected.targetDate || "";
     els.scheduleEditEndDate.value = selected.endDate || selected.targetDate || "";
@@ -5564,6 +6320,18 @@ function handleScheduleEdit(event) {
     if (event.type === "change") renderSchedule();
     return;
   }
+  if (event.target === els.scheduleViewMode) {
+    state.schedule.viewMode = event.target.value || "calendar";
+    saveActiveCrmRecordEdits();
+    if (event.type === "change") renderSchedule();
+    return;
+  }
+  if (event.target === els.scheduleGanttSort) {
+    state.schedule.ganttSort = event.target.value || "project";
+    saveActiveCrmRecordEdits();
+    if (event.type === "change") renderSchedule();
+    return;
+  }
   const row = event.target.closest("[data-schedule-item]");
   const field = event.target.dataset.scheduleField;
   const item = state.schedule.items.find((entry) => entry.id === row?.dataset.scheduleItem);
@@ -5578,6 +6346,21 @@ function handleScheduleEdit(event) {
   if (field === "endDate" && item.endDate < item.targetDate) item.targetDate = item.endDate;
   saveActiveCrmRecordEdits();
   if (event.type === "change") renderSchedule();
+}
+
+function handleGanttInlineEdit(event) {
+  const editor = event.target.closest("[data-gantt-inline-editor]");
+  const field = event.target.dataset.ganttInlineField;
+  if (!editor || !field) return false;
+  const { schedule, item } = scheduleItemForProject(editor.dataset.scheduleProject, editor.dataset.scheduleEvent);
+  if (!schedule || !item) return false;
+  item[field] = event.target.value;
+  if (field === "targetDate" && (!item.endDate || item.endDate < item.targetDate)) item.endDate = item.targetDate;
+  if (field === "endDate" && item.endDate < item.targetDate) item.targetDate = item.endDate;
+  schedule.selectedItemId = item.id;
+  persistScheduleProject(editor.dataset.scheduleProject);
+  if (event.type === "change") renderSchedule();
+  return true;
 }
 
 function handleScheduleEditorEdit(event) {
@@ -5597,6 +6380,7 @@ function handleScheduleEditorEdit(event) {
     scheduleEditTrade: "trade",
     scheduleEditSubtrade: "subtrade",
     scheduleEditPurchaseOrder: "purchaseOrderId",
+    scheduleEditDependsOn: "dependsOn",
     scheduleEditDate: "targetDate",
     scheduleEditEndDate: "endDate",
     scheduleEditStatus: "status",
@@ -5665,6 +6449,7 @@ function createScheduleItemOnDate(dateText) {
     trade: filter.type === "trade" || filter.type === "company" ? filter.trade : "Framing",
     subtrade: filter.type === "company" ? filter.company : "",
     purchaseOrderId: "",
+    dependsOn: selectedScheduleItem()?.id || "",
     addedBy: scheduleAddedByName(),
     flagged: false,
     flagNote: "",
@@ -5695,6 +6480,9 @@ function deleteSelectedScheduleItem() {
   const shouldDelete = window.confirm(`Delete "${selected.name}" from the schedule?`);
   if (!shouldDelete) return;
   state.schedule.items = state.schedule.items.filter((item) => item.id !== selected.id);
+  state.schedule.items.forEach((item) => {
+    if (item.dependsOn === selected.id) item.dependsOn = "";
+  });
   state.schedule.selectedItemId = state.schedule.items[0]?.id || "";
   state.schedule.editorOpen = false;
   renderSchedule();
@@ -5985,8 +6773,10 @@ function renderManagement() {
 }
 
 function render() {
+  updateAreaLabels();
   syncProjectLevelAvailability();
   syncProjectQuantities();
+  syncEstimateMarginsToTarget();
   renderEstimateProjectPicker();
   renderSections();
   renderAllowances();
@@ -7074,6 +7864,8 @@ function normalizeSchedule(schedule) {
     selectedItemId: schedule?.selectedItemId || "",
     scope: schedule?.scope || "current",
     tradeFilter: schedule?.tradeFilter || "All trades",
+    viewMode: ["calendar", "gantt"].includes(schedule?.viewMode) ? schedule.viewMode : "calendar",
+    ganttSort: ["project", "date"].includes(schedule?.ganttSort) ? schedule.ganttSort : "project",
     editorOpen: false,
     dayPopupDate: "",
   };
@@ -7084,6 +7876,7 @@ function normalizeSchedule(schedule) {
     trade: item.trade || item.department || "Production",
     subtrade: item.subtrade || "",
     purchaseOrderId: item.purchaseOrderId || "",
+    dependsOn: item.dependsOn || "",
     addedBy: item.addedBy || "Unknown",
     flagged: Boolean(item.flagged),
     flagNote: item.flagNote || "",
@@ -7252,6 +8045,8 @@ function currentCrmRecord() {
     estimateTotal: totals.total,
     estimateVersions: state.estimateVersions || [],
     sentEstimateVersionId: state.sentEstimateVersionId || "",
+    proposalVersions: state.proposalVersions || [],
+    sentProposalVersionId: state.sentProposalVersionId || "",
     schedule: state.schedule,
     selections: state.selections,
     contract: state.contract,
@@ -7275,7 +8070,8 @@ function applyCrmRecord(record) {
   state.crm.activeRecordId = record.id;
   els.projectName.value = record.projectName || "";
   els.customerName.value = record.customerName || "";
-  els.projectType.value = record.projectType || "RTM";
+  els.projectType.value = record.projectType === "Site-built" ? "Site Build" : record.projectType || "RTM";
+  state.estimateViewMode = estimateModeFromProjectType(els.projectType.value);
   els.projectLevel.value = record.projectLevel && record.projectLevel !== "N/A" ? record.projectLevel : "Standard";
   els.houseSqft.value = record.houseSqft || 1400;
   els.garageSqft.value = record.garageSqft || 0;
@@ -7305,11 +8101,16 @@ function applyCrmRecord(record) {
   state.jobFiles = normalizeJobFiles(record.jobFiles);
   state.estimateVersions = Array.isArray(record.estimateVersions) ? record.estimateVersions : [];
   state.sentEstimateVersionId = record.sentEstimateVersionId || "";
+  state.proposalVersions = Array.isArray(record.proposalVersions) ? record.proposalVersions : [];
+  state.sentProposalVersionId = record.sentProposalVersionId || "";
   restoreEstimateState(record.estimate || { lines: record.estimateLines, calcValues: record.calcValues, allowanceValues: record.allowanceValues });
   state.output = {
     estimateVersionId: record.output?.estimateVersionId || record.sentEstimateVersionId || "current",
+    additionalEstimateVersionIds: Array.isArray(record.output?.additionalEstimateVersionIds) ? record.output.additionalEstimateVersionIds : [],
+    proposalVersionId: record.output?.proposalVersionId || record.sentProposalVersionId || "",
     estimateDate: record.output?.estimateDate || "",
     providedBy: record.output?.providedBy || record.salesperson || "",
+    emailRecipients: record.output?.emailRecipients || record.email || "",
     location: record.output?.location || "",
     intro: record.output?.intro || "",
     movingNotes: record.output?.movingNotes || "",
@@ -7322,8 +8123,10 @@ function applyCrmRecord(record) {
   state.contract = {
     date: record.contract?.date || "",
     estimateVersionId: record.contract?.estimateVersionId || record.sentEstimateVersionId || "current",
+    proposalVersionId: record.contract?.proposalVersionId || record.sentProposalVersionId || "current",
     customerName: record.contract?.customerName || record.customerName || "",
     location: record.contract?.location || record.projectAddress || "",
+    emailRecipients: record.contract?.emailRecipients || record.output?.emailRecipients || record.email || "",
     depositTerms: record.contract?.depositTerms || "Deposit and payment schedule to be confirmed with Zak's Homes & Cottages prior to production start.",
     approval: record.contract?.approval || {},
     inclusions: record.contract?.inclusions || {},
@@ -7354,6 +8157,7 @@ function newCrmLead() {
   els.projectName.value = "New Lead";
   els.customerName.value = "";
   els.projectType.value = "RTM";
+  state.estimateViewMode = "rtm";
   els.projectLevel.value = "Standard";
   els.houseSqft.value = 1400;
   els.garageSqft.value = 0;
@@ -7386,6 +8190,8 @@ function newCrmLead() {
     selectedItemId: "",
     scope: "current",
     tradeFilter: "All trades",
+    viewMode: "calendar",
+    ganttSort: "project",
     editorOpen: false,
     dayPopupDate: "",
   };
@@ -7397,11 +8203,16 @@ function newCrmLead() {
   state.jobFiles = [];
   state.estimateVersions = [];
   state.sentEstimateVersionId = "";
+  state.proposalVersions = [];
+  state.sentProposalVersionId = "";
   hydrateBlankEstimate();
   state.output = {
     estimateVersionId: "current",
+    additionalEstimateVersionIds: [],
+    proposalVersionId: "",
     estimateDate: todayIso(),
     providedBy: loggedInSalespersonName(),
+    emailRecipients: "",
     location: "",
     intro: "",
     movingNotes: "",
@@ -7414,8 +8225,10 @@ function newCrmLead() {
   state.contract = {
     date: todayIso(),
     estimateVersionId: "current",
+    proposalVersionId: "current",
     customerName: "",
     location: "",
+    emailRecipients: "",
     depositTerms: "Deposit and payment schedule to be confirmed with Zak's Homes & Cottages prior to production start.",
     approval: {
       status: "Pending review",
@@ -8363,7 +9176,11 @@ async function init() {
     "customerName",
     "projectType",
     "projectLevel",
+    "houseSqftField",
+    "houseSqftLabel",
     "houseSqft",
+    "garageSqftField",
+    "garageSqftLabel",
     "garageSqft",
     "travelDistance",
     "destinationTown",
@@ -8388,6 +9205,8 @@ async function init() {
     "grandTotal",
     "rtmEstimateTotal",
     "siteEstimateTotal",
+    "garageEstimateTotal",
+    "shouseEstimateTotal",
     "combinedEstimateTotal",
     "marginPct",
     "priceSqft",
@@ -8396,6 +9215,7 @@ async function init() {
     "sectionsList",
     "outputEstimateDate",
     "outputProvidedBy",
+    "outputEmailRecipients",
     "outputLocation",
     "outputIntro",
     "outputMovingNotes",
@@ -8408,19 +9228,26 @@ async function init() {
     "outputScopeContract",
     "addOutputScopeItemBtn",
     "outputScopeItemsList",
+    "saveProposalVersionBtn",
+    "emailProposalBtn",
+    "proposalVersionStatus",
+    "proposalVersionsList",
     "printOutputBtn",
     "outputLineEditor",
     "proposalPreview",
     "outputEstimateVersion",
+    "outputEstimateAddons",
     "contractDate",
     "contractEstimateVersion",
     "contractCustomerName",
     "contractLocation",
+    "contractEmailRecipients",
     "contractDepositTerms",
     "contractApprovalStatus",
     "contractApprovalNote",
     "approveContractBtn",
     "revokeContractApprovalBtn",
+    "emailContractBtn",
     "contractApprovalMessage",
     "printContractBtn",
     "contractInclusions",
@@ -8500,6 +9327,8 @@ async function init() {
     "scheduleOwner",
     "scheduleScope",
     "scheduleTradeFilter",
+    "scheduleViewMode",
+    "scheduleGanttSort",
     "applyScheduleTemplateBtn",
     "scheduleBody",
     "scheduleNextMilestone",
@@ -8514,6 +9343,8 @@ async function init() {
     "scheduleDayPopupItems",
     "closeScheduleDayPopupBtn",
     "scheduleCalendar",
+    "scheduleCalendarWeekdays",
+    "scheduleGantt",
     "scheduleCalendarTitle",
     "scheduleCalendarSubtitle",
     "schedulePrevMonthBtn",
@@ -8525,6 +9356,7 @@ async function init() {
     "scheduleEditTrade",
     "scheduleEditSubtrade",
     "scheduleEditPurchaseOrder",
+    "scheduleEditDependsOn",
     "scheduleEditAddedBy",
     "scheduleEditDate",
     "scheduleEditEndDate",
@@ -8739,9 +9571,13 @@ async function init() {
       handleContractEdit(event);
       return;
     }
+    if (event.target.closest("[data-gantt-inline-editor]")) {
+      handleGanttInlineEdit(event);
+      return;
+    }
     if (
       event.target.closest("[data-schedule-item]") ||
-      [els.scheduleStartDate, els.scheduleOwner, els.scheduleScope, els.scheduleTradeFilter].includes(event.target)
+      [els.scheduleStartDate, els.scheduleOwner, els.scheduleScope, els.scheduleTradeFilter, els.scheduleViewMode, els.scheduleGanttSort].includes(event.target)
     ) {
       handleScheduleEdit(event);
       return;
@@ -8754,6 +9590,7 @@ async function init() {
         els.scheduleEditTrade,
         els.scheduleEditSubtrade,
         els.scheduleEditPurchaseOrder,
+        els.scheduleEditDependsOn,
         els.scheduleEditDate,
         els.scheduleEditEndDate,
         els.scheduleEditStatus,
@@ -8770,9 +9607,7 @@ async function init() {
       return;
     }
     if (event.target === els.targetMargin) {
-      state.lines.forEach((line) => {
-        line.margin = num(els.targetMargin.value, 18);
-      });
+      syncEstimateMarginsToTarget();
       render();
       saveActiveCrmRecordEdits();
       return;
@@ -8857,9 +9692,13 @@ async function init() {
       handleContractEdit(event);
       return;
     }
+    if (event.target.closest("[data-gantt-inline-editor]")) {
+      handleGanttInlineEdit(event);
+      return;
+    }
     if (
       event.target.closest("[data-schedule-item]") ||
-      [els.scheduleStartDate, els.scheduleOwner, els.scheduleScope, els.scheduleTradeFilter].includes(event.target)
+      [els.scheduleStartDate, els.scheduleOwner, els.scheduleScope, els.scheduleTradeFilter, els.scheduleViewMode, els.scheduleGanttSort].includes(event.target)
     ) {
       handleScheduleEdit(event);
       return;
@@ -8872,6 +9711,7 @@ async function init() {
         els.scheduleEditTrade,
         els.scheduleEditSubtrade,
         els.scheduleEditPurchaseOrder,
+        els.scheduleEditDependsOn,
         els.scheduleEditDate,
         els.scheduleEditEndDate,
         els.scheduleEditStatus,
@@ -8883,7 +9723,14 @@ async function init() {
       handleScheduleEditorEdit(event);
       return;
     }
-    if ([els.sectionFilter, els.projectType].includes(event.target)) render();
+    if (event.target === els.projectType) {
+      state.estimateViewMode = estimateModeFromProjectType(event.target.value);
+      els.sectionFilter.value = "All";
+      render();
+      saveActiveCrmRecordEdits();
+      return;
+    }
+    if (event.target === els.sectionFilter) render();
   });
   document.addEventListener("click", (event) => {
     if (state.auth.accountPanelOpen && !event.target.closest(".account-menu")) {
@@ -8915,8 +9762,11 @@ async function init() {
     const estimateScopeButton = event.target.closest("[data-estimate-scope]");
     if (estimateScopeButton) {
       state.estimateViewMode = estimateScopeButton.dataset.estimateScope || "all";
+      if (state.estimateViewMode !== "all") els.projectType.value = projectTypeFromEstimateMode(state.estimateViewMode);
       els.sectionFilter.value = "All";
       renderSections();
+      updateTotals();
+      saveActiveCrmRecordEdits();
       return;
     }
     const toggle = event.target.closest("[data-toggle-section]");
@@ -8944,6 +9794,18 @@ async function init() {
     const openVersionButton = event.target.closest("[data-open-estimate-version]");
     if (openVersionButton) {
       openEstimateVersion(openVersionButton.dataset.openEstimateVersion);
+      return;
+    }
+    const markProposalSentButton = event.target.closest("[data-mark-proposal-sent]");
+    if (markProposalSentButton) {
+      markProposalVersionSent(markProposalSentButton.dataset.markProposalSent);
+      return;
+    }
+    const useProposalVersionButton = event.target.closest("[data-use-proposal-version]");
+    if (useProposalVersionButton) {
+      state.contract.proposalVersionId = useProposalVersionButton.dataset.useProposalVersion;
+      renderContract();
+      saveActiveCrmRecordEdits();
       return;
     }
     if (event.target.closest("[data-close-estimate-version]")) {
@@ -9073,7 +9935,15 @@ async function init() {
       event.preventDefault();
       return;
     }
+    if (event.target.closest("[data-gantt-inline-editor]")) return;
     if (event.target.closest("[data-schedule-resize]")) return;
+    const ganttComplete = event.target.closest("[data-gantt-complete]");
+    if (ganttComplete) {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleGanttComplete(ganttComplete.dataset.scheduleProject, ganttComplete.dataset.ganttComplete);
+      return;
+    }
     const scheduleEvent = event.target.closest("[data-schedule-event]");
     if (scheduleEvent) {
       event.preventDefault();
@@ -9090,7 +9960,13 @@ async function init() {
         }
         return;
       }
-      state.schedule.selectedItemId = scheduleEvent.dataset.scheduleEvent;
+      const clickedItemId = scheduleEvent.dataset.scheduleEvent;
+      if (state.schedule.viewMode === "gantt" && state.schedule.selectedItemId === clickedItemId && state.schedule.editorOpen) {
+        state.schedule.editorOpen = false;
+        renderSchedule();
+        return;
+      }
+      state.schedule.selectedItemId = clickedItemId;
       state.schedule.editorOpen = true;
       renderSchedule();
       return;
@@ -9203,7 +10079,10 @@ async function init() {
   els.distanceLookupBtn.addEventListener("click", lookupDistance);
   els.saveEstimateVersionBtn.addEventListener("click", saveEstimateVersion);
   els.closeEstimateVersionBtn.addEventListener("click", closeEstimateVersion);
+  els.saveProposalVersionBtn.addEventListener("click", () => saveProposalVersion());
+  els.emailProposalBtn.addEventListener("click", emailProposalVersion);
   els.printContractBtn.addEventListener("click", printApprovedContract);
+  els.emailContractBtn.addEventListener("click", emailApprovedContract);
   els.approveContractBtn.addEventListener("click", approveContract);
   els.revokeContractApprovalBtn.addEventListener("click", revokeContractApproval);
   els.closeManagementBreakdownBtn.addEventListener("click", () => {
@@ -9214,7 +10093,7 @@ async function init() {
     state.taskBreakdown = null;
     renderTaskBreakdown();
   });
-  els.printOutputBtn.addEventListener("click", () => window.print());
+  els.printOutputBtn.addEventListener("click", printProposalVersion);
   els.addOutputScopeItemBtn.addEventListener("click", addOutputScopeItem);
   els.printBillingReportBtn.addEventListener("click", printBillingReport);
   els.printPurchaseOrderBtn.addEventListener("click", () => printPurchaseOrder());
@@ -9340,6 +10219,10 @@ async function init() {
   ["projectName", "customerName", "projectType", "projectLevel", "houseSqft", "garageSqft", "travelDistance", "destinationTown", "destinationProvince"].forEach((id) =>
     ["input", "change"].forEach((eventName) =>
       byId(id).addEventListener(eventName, () => {
+        if (id === "projectType") {
+          state.estimateViewMode = estimateModeFromProjectType(els.projectType.value);
+          els.sectionFilter.value = "All";
+        }
         render();
         renderEstimateOutput();
         renderContract();

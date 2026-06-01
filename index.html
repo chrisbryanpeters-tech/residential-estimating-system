@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RTM Estimate Prototype</title>
-    <link rel="stylesheet" href="./styles.css?v=schedule-project-select" />
+    <link rel="stylesheet" href="./styles.css?v=gantt-popdown-toggle" />
   </head>
   <body>
     <section id="loginScreen" class="login-screen">
@@ -109,6 +109,20 @@
             Trade calendar
             <select id="scheduleTradeFilter"></select>
           </label>
+          <label>
+            View
+            <select id="scheduleViewMode">
+              <option value="calendar">Calendar</option>
+              <option value="gantt">Gantt</option>
+            </select>
+          </label>
+          <label>
+            Gantt sort
+            <select id="scheduleGanttSort">
+              <option value="project">By project</option>
+              <option value="date">By date</option>
+            </select>
+          </label>
           <button id="applyScheduleTemplateBtn" class="secondary" type="button">Apply template</button>
         </section>
 
@@ -191,8 +205,9 @@
                   Type
                   <select id="projectType">
                     <option>RTM</option>
-                    <option>Simple Home</option>
-                    <option>Site-built</option>
+                    <option>Site Build</option>
+                    <option>Detached Garage</option>
+                    <option>Shouse / Barndominium</option>
                   </select>
                 </label>
                 <label>
@@ -203,12 +218,12 @@
                     <option>Executive</option>
                   </select>
                 </label>
-                <label>
-                  House sq ft
+                <label id="houseSqftField">
+                  <span id="houseSqftLabel">House sq ft</span>
                   <input id="houseSqft" type="number" value="1400" min="0" />
                 </label>
-                <label>
-                  Garage sq ft
+                <label id="garageSqftField">
+                  <span id="garageSqftLabel">Garage sq ft</span>
                   <input id="garageSqft" type="number" value="0" min="0" />
                 </label>
                 <label>
@@ -232,8 +247,10 @@
               </section>
               <div class="estimate-scope-bar" aria-label="Estimate type">
                 <button class="estimate-scope-option active" type="button" data-estimate-scope="all">All</button>
-                <button class="estimate-scope-option" type="button" data-estimate-scope="rtm">RTM Estimate</button>
-                <button class="estimate-scope-option" type="button" data-estimate-scope="site">Site Estimate</button>
+                <button class="estimate-scope-option" type="button" data-estimate-scope="rtm">RTM</button>
+                <button class="estimate-scope-option" type="button" data-estimate-scope="site">Site Build</button>
+                <button class="estimate-scope-option" type="button" data-estimate-scope="garage">Detached Garage</button>
+                <button class="estimate-scope-option" type="button" data-estimate-scope="shouse">Shouse / Barndominium</button>
               </div>
               <div class="section-toolbar">
                 <label>
@@ -260,6 +277,14 @@
                 <article>
                   <span>Site total</span>
                   <strong id="siteEstimateTotal">$0</strong>
+                </article>
+                <article>
+                  <span>Garage total</span>
+                  <strong id="garageEstimateTotal">$0</strong>
+                </article>
+                <article>
+                  <span>Shouse total</span>
+                  <strong id="shouseEstimateTotal">$0</strong>
                 </article>
                 <article class="combined">
                   <span>Combined total</span>
@@ -309,9 +334,13 @@
               <section class="crm-card">
                 <h3>Proposal Setup</h3>
                 <label>
-                  Estimate source
+                  First estimate
                   <select id="outputEstimateVersion"></select>
                 </label>
+                <div class="proposal-estimate-picker">
+                  <span>Additional estimates to include</span>
+                  <div id="outputEstimateAddons" class="proposal-estimate-addons"></div>
+                </div>
                 <label>
                   Estimate date
                   <input id="outputEstimateDate" type="date" />
@@ -336,7 +365,17 @@
                   Exclusions
                   <textarea id="outputExclusions" rows="8"></textarea>
                 </label>
-                <button id="printOutputBtn" type="button">Print / save PDF</button>
+                <label>
+                  Email recipients
+                  <input id="outputEmailRecipients" placeholder="customer@example.com, office@example.com" />
+                </label>
+                <div class="proposal-action-grid">
+                  <button id="saveProposalVersionBtn" type="button">Save proposal version</button>
+                  <button id="emailProposalBtn" class="secondary" type="button">Email proposal</button>
+                  <button id="printOutputBtn" class="secondary" type="button">Print / save PDF</button>
+                </div>
+                <p id="proposalVersionStatus" class="helper-note"></p>
+                <div id="proposalVersionsList" class="estimate-version-list proposal-version-list"></div>
               </section>
               <section class="crm-card">
                 <h3>Additional Scope Items</h3>
@@ -391,7 +430,7 @@
                   <input id="contractDate" type="date" />
                 </label>
                 <label>
-                  Contract amount source
+                  Proposal version for contract
                   <select id="contractEstimateVersion"></select>
                 </label>
                 <label>
@@ -411,11 +450,18 @@
                   Approval note
                   <textarea id="contractApprovalNote" rows="3" placeholder="Internal review note"></textarea>
                 </label>
+                <label>
+                  Email recipients
+                  <input id="contractEmailRecipients" placeholder="customer@example.com, office@example.com" />
+                </label>
                 <div class="contract-approval-actions">
                   <button id="approveContractBtn" class="secondary" type="button">Approve contract</button>
                   <button id="revokeContractApprovalBtn" class="danger-button" type="button">Revoke approval</button>
                 </div>
-                <button id="printContractBtn" type="button">Print / save PDF</button>
+                <div class="proposal-action-grid">
+                  <button id="emailContractBtn" class="secondary" type="button">Email contract</button>
+                  <button id="printContractBtn" type="button">Print / save PDF</button>
+                </div>
                 <p id="contractApprovalMessage" class="helper-note"></p>
               </section>
               <section class="crm-card">
@@ -596,33 +642,17 @@
                   <button id="schedulePrevMonthBtn" class="secondary icon-button" type="button" title="Previous month">‹</button>
                   <div>
                     <h3 id="scheduleCalendarTitle">Month</h3>
-                    <p id="scheduleCalendarSubtitle">Click a day or milestone to edit the schedule.</p>
+                    <p id="scheduleCalendarSubtitle">Click a day or schedule item to edit the schedule.</p>
                   </div>
                   <button id="scheduleTodayBtn" class="secondary" type="button">Today</button>
                   <button id="scheduleNextMonthBtn" class="secondary icon-button" type="button" title="Next month">›</button>
                 </div>
-                <div class="calendar-weekdays">
+                <div id="scheduleCalendarWeekdays" class="calendar-weekdays">
                   <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
                 </div>
                 <div id="scheduleCalendar" class="schedule-calendar"></div>
+                <div id="scheduleGantt" class="schedule-gantt" hidden></div>
               </section>
-              <div class="schedule-table-wrap">
-                <table class="schedule-table">
-                  <thead>
-                    <tr>
-                      <th>Milestone</th>
-                      <th>Department</th>
-                      <th>Trade</th>
-                      <th>Company</th>
-                      <th>Start date</th>
-                      <th>End date</th>
-                      <th>Status</th>
-                      <th>Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody id="scheduleBody"></tbody>
-                </table>
-              </div>
             </section>
 
             <aside class="schedule-side">
@@ -637,7 +667,7 @@
                     <select id="scheduleEditProjectName"></select>
                   </label>
                   <label>
-                    Milestone
+                    Schedule item
                     <input id="scheduleEditName" />
                   </label>
                   <label>
@@ -661,6 +691,10 @@
                   <label>
                     Purchase order
                     <select id="scheduleEditPurchaseOrder"></select>
+                  </label>
+                  <label>
+                    Depends on
+                    <select id="scheduleEditDependsOn"></select>
                   </label>
                   <label>
                     Added by
@@ -1302,10 +1336,6 @@
               <h3>Section Summary</h3>
               <div id="reviewSections" class="review-list"></div>
             </section>
-            <section>
-              <h3>Items To Review</h3>
-              <div id="reviewWarnings" class="review-list"></div>
-            </section>
           </div>
         </section>
       </main>
@@ -1372,6 +1402,6 @@
       </div>
     </section>
 
-    <script src="./app.js?v=schedule-po-match-select"></script>
+    <script src="./app.js?v=gantt-popdown-toggle"></script>
   </body>
 </html>
