@@ -48,6 +48,7 @@ const state = {
     tradeFilter: "All trades",
     viewMode: "calendar",
     ganttSort: "project",
+    ganttPopdownItemId: "",
     editorOpen: false,
     dayPopupDate: "",
     resizeDrag: null,
@@ -5237,6 +5238,7 @@ function ensureSchedule() {
   if (!state.schedule.tradeFilter) state.schedule.tradeFilter = "All trades";
   if (!["calendar", "gantt"].includes(state.schedule.viewMode)) state.schedule.viewMode = "calendar";
   if (!["project", "date"].includes(state.schedule.ganttSort)) state.schedule.ganttSort = "project";
+  if (state.schedule.ganttPopdownItemId === undefined) state.schedule.ganttPopdownItemId = "";
   if (!Array.isArray(state.schedule.items) || !state.schedule.items.length) {
     state.schedule.items = createScheduleItems(state.schedule.startDate);
   }
@@ -5268,6 +5270,7 @@ function applyScheduleTemplate() {
   state.schedule.tradeFilter = els.scheduleTradeFilter.value || "All trades";
   state.schedule.viewMode = els.scheduleViewMode.value || "calendar";
   state.schedule.ganttSort = els.scheduleGanttSort.value || "project";
+  state.schedule.ganttPopdownItemId = "";
   render();
 }
 
@@ -6043,7 +6046,7 @@ function renderScheduleGantt(visibleItems = calendarItems()) {
     const endColumn = Math.max(startColumn + 1, dayDiff(startDate, itemEnd) + 3);
     return { item, rowIndex, startColumn, endColumn };
   });
-  const rowSizes = positioned.map(({ item }) => (state.schedule.editorOpen && item.id === state.schedule.selectedItemId && item.isCurrentProject ? expandedRowHeight : compactRowHeight));
+  const rowSizes = positioned.map(({ item }) => (item.id === state.schedule.ganttPopdownItemId && item.isCurrentProject ? expandedRowHeight : compactRowHeight));
   const rowTemplate = rowSizes.length ? rowSizes.map((height) => `${height}px`).join(" ") : `${compactRowHeight}px`;
   const timelineGridStyle = `grid-template-columns: repeat(${days.length}, minmax(22px, 1fr)); grid-template-rows: ${rowTemplate};`;
   const labelGridStyle = `grid-template-rows: ${rowTemplate};`;
@@ -6100,7 +6103,7 @@ function renderScheduleGantt(visibleItems = calendarItems()) {
                 ${positioned
                   .map(({ item: ganttItem }, rowIndex) => {
                     const rowLabel = `${ganttItem.name || ganttItem.trade || "Schedule item"} - ${ganttItem.projectName || "Project"}`;
-                    const isExpanded = state.schedule.editorOpen && ganttItem.id === state.schedule.selectedItemId && ganttItem.isCurrentProject;
+                    const isExpanded = ganttItem.id === state.schedule.ganttPopdownItemId && ganttItem.isCurrentProject;
                     return `
                     <div class="gantt-row-label gantt-overlay-label ${isExpanded ? "is-expanded" : ""}" style="grid-row: ${rowIndex + 1};" data-schedule-event="${ganttItem.id}" data-schedule-project="${escapeAttr(ganttItem.projectId)}">
                       <button class="gantt-row-title" type="button" data-schedule-event="${ganttItem.id}" data-schedule-project="${escapeAttr(ganttItem.projectId)}">
@@ -7866,6 +7869,7 @@ function normalizeSchedule(schedule) {
     tradeFilter: schedule?.tradeFilter || "All trades",
     viewMode: ["calendar", "gantt"].includes(schedule?.viewMode) ? schedule.viewMode : "calendar",
     ganttSort: ["project", "date"].includes(schedule?.ganttSort) ? schedule.ganttSort : "project",
+    ganttPopdownItemId: schedule?.ganttPopdownItemId || "",
     editorOpen: false,
     dayPopupDate: "",
   };
@@ -8192,6 +8196,7 @@ function newCrmLead() {
     tradeFilter: "All trades",
     viewMode: "calendar",
     ganttSort: "project",
+    ganttPopdownItemId: "",
     editorOpen: false,
     dayPopupDate: "",
   };
@@ -9946,6 +9951,19 @@ async function init() {
     }
     const scheduleEvent = event.target.closest("[data-schedule-event]");
     if (scheduleEvent) {
+      if (state.schedule.viewMode === "gantt" && scheduleEvent.closest("#scheduleGantt")) {
+        const clickedItemId = scheduleEvent.dataset.scheduleEvent;
+        if (event.target.closest(".gantt-row-title")) {
+          event.preventDefault();
+          state.schedule.dayPopupDate = "";
+          state.schedule.selectedItemId = clickedItemId;
+          state.schedule.editorOpen = false;
+          state.schedule.ganttPopdownItemId = state.schedule.ganttPopdownItemId === clickedItemId ? "" : clickedItemId;
+          renderSchedule();
+          return;
+        }
+        if (!event.target.closest(".gantt-bar-label")) return;
+      }
       event.preventDefault();
       state.schedule.dayPopupDate = "";
       const projectId = scheduleEvent.dataset.scheduleProject;
@@ -9968,6 +9986,7 @@ async function init() {
       }
       state.schedule.selectedItemId = clickedItemId;
       state.schedule.editorOpen = true;
+      if (state.schedule.viewMode === "gantt") state.schedule.ganttPopdownItemId = "";
       renderSchedule();
       return;
     }
