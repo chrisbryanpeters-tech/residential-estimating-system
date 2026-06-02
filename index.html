@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RTM Estimate Prototype</title>
-    <link rel="stylesheet" href="./styles.css?v=gantt-split-open-targets" />
+    <link rel="stylesheet" href="./styles.css?v=kitchen-design-workbook" />
   </head>
   <body>
     <section id="loginScreen" class="login-screen">
@@ -61,6 +61,7 @@
             <div class="nav-subnav">
               <button class="nav-button" data-view="schedule">Schedule</button>
               <button class="nav-button" data-view="selections">Project Info</button>
+              <button class="nav-button" data-view="kitchenDesign">Kitchen Design</button>
               <button class="nav-button" data-view="vendors">Vendor/Subtrade Management</button>
               <button class="nav-button" data-view="jobFiles">Files & Photos</button>
               <button class="nav-button" data-view="warranty">Warranty</button>
@@ -920,6 +921,20 @@
           </div>
         </section>
 
+        <section id="kitchenDesignView" class="view">
+          <div class="kitchen-design-summary" id="kitchenDesignSummary"></div>
+          <section class="crm-card kitchen-design-card">
+            <div class="crm-card-head">
+              <div>
+                <h3>Kitchen Design Workbook</h3>
+                <span class="billing-stage-summary">Client discovery, selections, signoff, and internal handoff</span>
+              </div>
+              <button id="printKitchenDesignBtn" class="secondary mini-button" type="button">Print handoff</button>
+            </div>
+            <div id="kitchenDesignSections" class="kitchen-design-sections"></div>
+          </section>
+        </section>
+
         <section id="billingStagesView" class="view">
           <div class="order-summary">
             <div><span>Billing stages</span><strong id="billingStageCount">0</strong></div>
@@ -1402,6 +1417,6 @@
       </div>
     </section>
 
-    <script src="./app.js?v=gantt-split-open-targets"></script>
+    <script src="./app.js?v=kitchen-design-workbook"></script>
   </body>
 </html>

@@ -56,6 +56,7 @@ const state = {
     pendingResize: null,
   },
   selections: [],
+  kitchenDesign: {},
   activeSelectionCategory: "",
   output: {
     estimateVersionId: "current",
@@ -130,9 +131,9 @@ const state = {
 
 const users = [
   { id: "chris", name: "Chris Peters", role: "Owner", password: "zaks", permissions: ["all"] },
-  { id: "angela", name: "Angela Kiedrowski", role: "Sales", password: "zaks", permissions: ["crm", "estimate", "output", "contract", "tasks", "schedule", "selections", "vendors", "jobFiles", "warranty", "billingStages", "allowances", "purchaseOrders", "changeOrders", "review"] },
-  { id: "office", name: "Office Team", role: "Office", password: "zaks", permissions: ["crm", "contract", "tasks", "schedule", "selections", "vendors", "jobFiles", "warranty", "billingStages", "purchaseOrders", "changeOrders", "review"] },
-  { id: "production", name: "Production Team", role: "Production", password: "zaks", permissions: ["contract", "tasks", "schedule", "selections", "vendors", "jobFiles", "warranty", "billingStages", "purchaseOrders", "changeOrders", "review"] },
+  { id: "angela", name: "Angela Kiedrowski", role: "Sales", password: "zaks", permissions: ["crm", "estimate", "output", "contract", "tasks", "schedule", "selections", "kitchenDesign", "vendors", "jobFiles", "warranty", "billingStages", "allowances", "purchaseOrders", "changeOrders", "review"] },
+  { id: "office", name: "Office Team", role: "Office", password: "zaks", permissions: ["crm", "contract", "tasks", "schedule", "selections", "kitchenDesign", "vendors", "jobFiles", "warranty", "billingStages", "purchaseOrders", "changeOrders", "review"] },
+  { id: "production", name: "Production Team", role: "Production", password: "zaks", permissions: ["contract", "tasks", "schedule", "selections", "kitchenDesign", "vendors", "jobFiles", "warranty", "billingStages", "purchaseOrders", "changeOrders", "review"] },
   { id: "accounting", name: "Accounting Team", role: "Accounting", password: "zaks", permissions: ["vendors", "billingStages", "allowances", "purchaseOrders", "changeOrders", "review"] },
 ];
 
@@ -215,6 +216,49 @@ const selectionTemplate = [
   dueDate: "",
   notes: "",
 }));
+
+const kitchenDesignLists = {
+  projectType: ["RTM", "Site Built", "Renovation", "Cabinet Package Only"],
+  yesNo: ["", "Yes", "No", "Unsure"],
+  cooks: ["", "One cook", "Couple cooks together", "Family cooking", "Entertaining focused", "Baking focused", "Meal prep / health focused"],
+  frequency: ["", "Rarely", "Monthly", "Weekly", "Frequently"],
+  homeDuration: ["", "Forever home", "5-10 years", "Resale / investment"],
+  style: ["", "Modern", "Transitional", "Farmhouse", "Traditional", "Rustic", "Contemporary", "Scandinavian", "Unsure"],
+  doorStyle: ["", "Shaker", "Slim Shaker", "Bevelled Shaker", "Slab", "Laminate", "Melamine", "Fluted"],
+  woodSpecies: ["", "Hickory", "Rustic Hickory", "Maple", "White Oak", "Red Oak", "Alder", "Walnut", "N/A"],
+  finishType: ["", "Painted", "Stained", "Thermofoil", "Laminate", "Melamine", "Unsure"],
+  island: ["", "None", "Small", "Large", "Oversized statement island", "Unsure"],
+  seats: ["", "0", "2", "3", "4", "5+"],
+  side: ["", "Left", "Right", "No preference"],
+  pantry: ["", "Walk-in", "Cabinet pantry", "Butler pantry", "Hidden pantry", "Open shelving", "Unsure"],
+  fridgeType: ["", "Counter-depth", "Full-depth", "Unsure"],
+  range: ["", "Standard 30\"", "Upgrade 36\"", "Cooktop + wall oven", "Unsure"],
+  microwave: ["", "Over range", "Built into cabinetry", "Pantry", "Microwave drawer (upgrade)", "None / not required"],
+  countertop: ["", "Standard Laminate", "Premium Laminate", "Level 1 Quartz (Builder Grade)", "Premium Quartz", "Undecided"],
+  budget: ["", "Value / Builder Grade", "Mid-Level", "Premium", "Luxury / Custom", "Undecided"],
+  priority: ["", "Storage", "Functionality", "Appearance", "Budget", "Entertaining", "Easy Cleaning", "Large Island", "Pantry Space", "Durability", "Resale", "Accessibility"],
+  clientType: ["", "Practical / value focused", "Design focused", "Budget sensitive", "Storage focused", "High expectations", "Needs guidance", "Decisive", "Indecisive", "Easygoing"],
+  status: ["Not Started", "In Progress", "Waiting on Client", "Ready for Design", "Ready for Signoff", "Signed Off"],
+};
+
+const kitchenChecklistFields = [
+  ["discoveryComplete", "Client discovery workbook completed"],
+  ["appliancesDocumented", "Appliance assumptions documented"],
+  ["budgetTierIdentified", "Budget tier identified"],
+  ["inspirationGathered", "Inspiration gathered"],
+  ["housePlanReady", "House plan ready for kitchen development"],
+  ["salesIncluded", "Salesperson included in process"],
+  ["prioritiesDocumented", "Client priorities documented"],
+  ["cabinetSignoffRequired", "Cabinet signoff required before production"],
+];
+
+const kitchenAcknowledgementFields = [
+  ["ackDesignEvolves", "Initial cabinet design may evolve through the design process."],
+  ["ackAppliancesAffectLayout", "Appliance sizes and appliance selections affect cabinet layout."],
+  ["ackSelectionPricing", "Selections outside allowance or standard assumptions may affect pricing."],
+  ["ackChangesImpact", "Changes after approval may create redesign costs or schedule impacts."],
+  ["ackSignoffRequired", "Cabinet signoff is required before production."],
+];
 
 const scheduleTrades = [
   "Sales",
@@ -5211,6 +5255,324 @@ function handleSelectionEdit(event) {
   saveActiveCrmRecordEdits();
 }
 
+function normalizeKitchenDesign(source = {}, record = {}) {
+  const saved = source && typeof source === "object" ? source : {};
+  const defaults = {
+    status: "Not Started",
+    nextStepOwner: "Sales",
+    clientNames: record.customerName || els.customerName?.value || "",
+    projectAddress: record.projectAddress || els.crmProjectAddress?.value || "",
+    housePlan: record.projectName || els.projectName?.value || "",
+    projectType: record.projectType || els.projectType?.value || "RTM",
+    salesperson: record.salesperson || els.crmSalesperson?.value || loggedInSalespersonName(),
+    meetingDate: todayIso(),
+    targetMoveInDate: "",
+    cabinetDesigner: "Michelle",
+    goals: "",
+    constraints: "",
+    cooks: "",
+    entertainingFrequency: "",
+    homeDuration: "",
+    budgetDirection: "",
+    frustrations: "",
+    mustHaves: "",
+    doNotWant: "",
+    priority1: "",
+    priority1Notes: "",
+    priority2: "",
+    priority2Notes: "",
+    priority3: "",
+    priority3Notes: "",
+    priority4: "",
+    priority4Notes: "",
+    priority5: "",
+    priority5Notes: "",
+    preferredStyle: "",
+    styleNotes: "",
+    doorStyle: "",
+    doorNotes: "",
+    woodSpecies: "",
+    woodNotes: "",
+    finishType: "",
+    finishNotes: "",
+    inspiration: "",
+    islandPreference: "",
+    islandNotes: "",
+    islandSeating: "",
+    islandSeatingNotes: "",
+    coffeeStation: "",
+    coffeeStationNotes: "",
+    kidsLunchPrep: "",
+    kidsLunchPrepNotes: "",
+    bakingKitchen: "",
+    bakingKitchenNotes: "",
+    trayStorage: "",
+    trayStorageNotes: "",
+    garbagePulloutSide: "",
+    garbagePulloutNotes: "",
+    pantryStyle: "",
+    pantryNotes: "",
+    costcoStorage: "",
+    costcoStorageNotes: "",
+    pantryOutlets: "",
+    pantryOutletsNotes: "",
+    applianceGarage: "",
+    applianceGarageNotes: "",
+    chargingDrawer: "",
+    chargingDrawerNotes: "",
+    storageRequests: "",
+    fridgeType: "",
+    fridgeNotes: "",
+    waterLine: "",
+    waterLineNotes: "",
+    rangeCooking: "",
+    rangeNotes: "",
+    microwaveLocation: "",
+    microwaveNotes: "",
+    specialtyAppliances: "",
+    countertopTier: "",
+    countertopNotes: "",
+    backsplashDirection: "",
+    hardwareFinish: "",
+    finishPlanningNotes: "",
+    clientInitials: "",
+    signoffDate: "",
+    clientNotes: "",
+    clientPersonality: "",
+    budgetSensitivity: "",
+    technicalNotes: "",
+    constructionStandardNotes: "",
+  };
+  const normalized = { ...defaults, ...saved };
+  [...kitchenChecklistFields, ...kitchenAcknowledgementFields].forEach(([field]) => {
+    normalized[field] = Boolean(saved[field]);
+  });
+  return normalized;
+}
+
+function ensureKitchenDesign() {
+  state.kitchenDesign = normalizeKitchenDesign(state.kitchenDesign);
+}
+
+function kitchenSelectOptions(listName, selected = "") {
+  return (kitchenDesignLists[listName] || [])
+    .map((item) => `<option value="${escapeAttr(item)}" ${item === selected ? "selected" : ""}>${escapeAttr(item || "Select")}</option>`)
+    .join("");
+}
+
+function kitchenField(field, label, { type = "text", rows = 0, list = "", placeholder = "" } = {}) {
+  const value = state.kitchenDesign[field] ?? "";
+  if (list) {
+    return `
+      <label>
+        ${label}
+        <select data-kitchen-field="${field}">
+          ${kitchenSelectOptions(list, value)}
+        </select>
+      </label>
+    `;
+  }
+  if (rows) {
+    return `
+      <label class="wide-field">
+        ${label}
+        <textarea data-kitchen-field="${field}" rows="${rows}" placeholder="${escapeAttr(placeholder)}">${escapeAttr(value)}</textarea>
+      </label>
+    `;
+  }
+  return `
+    <label>
+      ${label}
+      <input data-kitchen-field="${field}" type="${type}" value="${escapeAttr(value)}" placeholder="${escapeAttr(placeholder)}" />
+    </label>
+  `;
+}
+
+function kitchenCheckbox(field, label) {
+  return `
+    <label class="check-row kitchen-check-row">
+      <input data-kitchen-field="${field}" type="checkbox" ${state.kitchenDesign[field] ? "checked" : ""} />
+      <span>${escapeAttr(label)}</span>
+    </label>
+  `;
+}
+
+function kitchenPriorityRows() {
+  return [1, 2, 3, 4, 5]
+    .map(
+      (index) => `
+        <div class="kitchen-priority-row">
+          ${kitchenField(`priority${index}`, `Priority ${index}`, { list: "priority" })}
+          ${kitchenField(`priority${index}Notes`, "Notes", { placeholder: "Why it matters" })}
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function kitchenSection(title, fieldsHtml) {
+  return `
+    <section class="kitchen-design-section">
+      <h4>${escapeAttr(title)}</h4>
+      <div class="kitchen-design-grid">
+        ${fieldsHtml}
+      </div>
+    </section>
+  `;
+}
+
+function renderKitchenDesign() {
+  if (!els.kitchenDesignSections) return;
+  ensureKitchenDesign();
+  const completedChecklist = kitchenChecklistFields.filter(([field]) => state.kitchenDesign[field]).length;
+  const completedAck = kitchenAcknowledgementFields.filter(([field]) => state.kitchenDesign[field]).length;
+  els.kitchenDesignSummary.innerHTML = `
+    <div><span>Status</span><strong>${escapeAttr(state.kitchenDesign.status || "Not Started")}</strong></div>
+    <div><span>Client</span><strong>${escapeAttr(state.kitchenDesign.clientNames || els.customerName?.value || "No client")}</strong></div>
+    <div><span>Designer</span><strong>${escapeAttr(state.kitchenDesign.cabinetDesigner || "Michelle")}</strong></div>
+    <div><span>Handoff checklist</span><strong>${completedChecklist}/${kitchenChecklistFields.length}</strong></div>
+    <div><span>Signoff items</span><strong>${completedAck}/${kitchenAcknowledgementFields.length}</strong></div>
+  `;
+  els.kitchenDesignSections.innerHTML = [
+    kitchenSection(
+      "Client & Project Information",
+      [
+        kitchenField("status", "Current status", { list: "status" }),
+        kitchenField("nextStepOwner", "Next step owner", { placeholder: "Sales, Michelle, client..." }),
+        kitchenField("clientNames", "Client name(s)"),
+        kitchenField("projectAddress", "Project address"),
+        kitchenField("housePlan", "RTM model / house plan"),
+        kitchenField("projectType", "Project type", { list: "projectType" }),
+        kitchenField("salesperson", "Salesperson"),
+        kitchenField("meetingDate", "Meeting date", { type: "date" }),
+        kitchenField("targetMoveInDate", "Target move-in date", { type: "date" }),
+        kitchenField("cabinetDesigner", "Cabinet designer"),
+        kitchenField("goals", "Initial client goals", { rows: 3 }),
+        kitchenField("constraints", "Known constraints / site / plan notes", { rows: 3 }),
+      ].join(""),
+    ),
+    kitchenSection(
+      "Lifestyle, Use & Priorities",
+      [
+        kitchenField("cooks", "Who cooks most often?", { list: "cooks" }),
+        kitchenField("entertainingFrequency", "Entertaining frequency", { list: "frequency" }),
+        kitchenField("homeDuration", "How long in home?", { list: "homeDuration" }),
+        kitchenField("budgetDirection", "Budget direction", { list: "budget" }),
+        kitchenField("frustrations", "Biggest frustrations with current kitchen", { rows: 3 }),
+        kitchenField("mustHaves", "Must-haves", { rows: 3 }),
+        kitchenField("doNotWant", "Absolutely do not want", { rows: 3 }),
+        `<div class="wide-field kitchen-priorities">${kitchenPriorityRows()}</div>`,
+      ].join(""),
+    ),
+    kitchenSection(
+      "Design Direction, Function & Storage",
+      [
+        kitchenField("preferredStyle", "Preferred style", { list: "style" }),
+        kitchenField("styleNotes", "Style / colour notes"),
+        kitchenField("doorStyle", "Door style", { list: "doorStyle" }),
+        kitchenField("doorNotes", "Door / colour notes"),
+        kitchenField("woodSpecies", "Wood species", { list: "woodSpecies" }),
+        kitchenField("woodNotes", "Wood / colour notes"),
+        kitchenField("finishType", "Finish type", { list: "finishType" }),
+        kitchenField("finishNotes", "Finish notes"),
+        kitchenField("inspiration", "Inspiration links / photos / reference homes", { rows: 3 }),
+        kitchenField("islandPreference", "Island preference", { list: "island" }),
+        kitchenField("islandNotes", "Island notes"),
+        kitchenField("islandSeating", "Island seating needed", { list: "seats" }),
+        kitchenField("islandSeatingNotes", "Seating notes"),
+        kitchenField("coffeeStation", "Coffee station", { list: "yesNo" }),
+        kitchenField("coffeeStationNotes", "Coffee station notes"),
+        kitchenField("kidsLunchPrep", "Kids lunch prep zone", { list: "yesNo" }),
+        kitchenField("kidsLunchPrepNotes", "Kids zone notes"),
+        kitchenField("bakingKitchen", "Baking-focused kitchen", { list: "yesNo" }),
+        kitchenField("bakingKitchenNotes", "Baking notes"),
+        kitchenField("trayStorage", "Baking tray storage", { list: "yesNo" }),
+        kitchenField("trayStorageNotes", "Tray storage notes"),
+        kitchenField("garbagePulloutSide", "Garbage pullout side", { list: "side" }),
+        kitchenField("garbagePulloutNotes", "Garbage pullout notes"),
+        kitchenField("pantryStyle", "Pantry style", { list: "pantry" }),
+        kitchenField("pantryNotes", "Pantry notes"),
+        kitchenField("costcoStorage", "Costco / bulk storage", { list: "yesNo" }),
+        kitchenField("costcoStorageNotes", "Bulk storage notes"),
+        kitchenField("pantryOutlets", "Pantry outlets needed", { list: "yesNo" }),
+        kitchenField("pantryOutletsNotes", "Pantry outlet notes"),
+        kitchenField("applianceGarage", "Appliance garage", { list: "yesNo" }),
+        kitchenField("applianceGarageNotes", "Appliance garage notes"),
+        kitchenField("chargingDrawer", "Charging drawer", { list: "yesNo" }),
+        kitchenField("chargingDrawerNotes", "Charging drawer notes"),
+        kitchenField("storageRequests", "Other storage requests", { rows: 3 }),
+      ].join(""),
+    ),
+    kitchenSection(
+      "Appliances, Countertops & Finish Planning",
+      [
+        `<div class="wide-field kitchen-assumptions">
+          <strong>Standard appliance assumptions</strong>
+          <span>36" fridge opening standard</span>
+          <span>30" range standard with option for 36"</span>
+          <span>Counter-depth or full-depth fridge options</span>
+          <span>Microwave drawer is an upgrade</span>
+        </div>`,
+        kitchenField("fridgeType", "Fridge type", { list: "fridgeType" }),
+        kitchenField("fridgeNotes", "Fridge notes / model if known"),
+        kitchenField("waterLine", "Fridge water line", { list: "yesNo" }),
+        kitchenField("waterLineNotes", "Water line notes"),
+        kitchenField("rangeCooking", "Range / cooking", { list: "range" }),
+        kitchenField("rangeNotes", "Range notes / model if known"),
+        kitchenField("microwaveLocation", "Microwave location", { list: "microwave" }),
+        kitchenField("microwaveNotes", "Microwave notes"),
+        kitchenField("specialtyAppliances", "Specialty appliances / appliance models", { rows: 3 }),
+        kitchenField("countertopTier", "Countertop tier", { list: "countertop" }),
+        kitchenField("countertopNotes", "Countertop notes"),
+        kitchenField("backsplashDirection", "Backsplash direction"),
+        kitchenField("hardwareFinish", "Hardware finish / vendor"),
+        kitchenField("finishPlanningNotes", "Finish notes / budget concerns / upgrades", { rows: 3 }),
+      ].join(""),
+    ),
+    kitchenSection(
+      "Client Summary & Signoff",
+      [
+        `<div class="wide-field kitchen-checklist">${kitchenAcknowledgementFields.map(([field, label]) => kitchenCheckbox(field, label)).join("")}</div>`,
+        kitchenField("clientInitials", "Client initials"),
+        kitchenField("signoffDate", "Signoff date", { type: "date" }),
+        kitchenField("clientNotes", "Additional client notes", { rows: 3 }),
+      ].join(""),
+    ),
+    kitchenSection(
+      "Internal Sales + Michelle Handoff",
+      [
+        `<div class="wide-field kitchen-checklist">${kitchenChecklistFields.map(([field, label]) => kitchenCheckbox(field, label)).join("")}</div>`,
+        kitchenField("clientPersonality", "Client personality / decision style", { list: "clientType" }),
+        kitchenField("budgetSensitivity", "Budget sensitivity / upgrade likelihood", { rows: 3 }),
+        kitchenField("technicalNotes", "Michelle technical notes", { rows: 3 }),
+        kitchenField("constructionStandardNotes", "Cabinet construction standard notes", { rows: 3 }),
+      ].join(""),
+    ),
+  ].join("");
+}
+
+function handleKitchenDesignEdit(event) {
+  const field = event.target.dataset.kitchenField;
+  if (!field) return;
+  ensureKitchenDesign();
+  state.kitchenDesign[field] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+  if (event.type === "change" || event.target.type === "checkbox" || field === "status") {
+    const active = document.activeElement;
+    renderKitchenDesign();
+    if (active?.dataset?.kitchenField) {
+      const next = els.kitchenDesignSections?.querySelector(`[data-kitchen-field="${CSS.escape(active.dataset.kitchenField)}"]`);
+      next?.focus();
+    }
+  }
+  saveActiveCrmRecordEdits();
+}
+
+function printKitchenDesign() {
+  document.body.classList.add("kitchen-design-printing");
+  window.print();
+  window.setTimeout(() => document.body.classList.remove("kitchen-design-printing"), 500);
+}
+
 function createScheduleItems(startDate = todayIso()) {
   const addedBy = scheduleAddedByName();
   return scheduleTemplate.map((item, index) => ({
@@ -6789,6 +7151,7 @@ function render() {
   renderProjectTasks();
   renderSchedule();
   renderSelections();
+  renderKitchenDesign();
   renderVendors();
   renderJobFiles();
   renderWarranty();
@@ -6803,9 +7166,10 @@ function render() {
 function setView(view) {
   if (!hasPermission(view)) view = firstAllowedView();
   state.view = view;
+  window.scrollTo({ top: 0, left: 0 });
   renderAuth();
   const fullProjectPanelViews = ["estimate", "output", "contract", "review"];
-  const compactProjectPanelViews = ["selections", "jobFiles", "billingStages", "purchaseOrders", "changeOrders", "allowances"];
+  const compactProjectPanelViews = ["selections", "kitchenDesign", "jobFiles", "billingStages", "purchaseOrders", "changeOrders", "allowances"];
   const projectPanelVisible = [...fullProjectPanelViews, ...compactProjectPanelViews].includes(view);
   byId("app").classList.toggle("project-panel-hidden", !projectPanelVisible);
   const projectPanel = document.querySelector(".project-panel");
@@ -6830,6 +7194,7 @@ function setView(view) {
     vendors: "Vendor/Subtrade Management",
     jobFiles: "Files & Photos",
     warranty: "Warranty",
+    kitchenDesign: "Kitchen Design",
     billingStages: "Billing Stages",
     purchaseOrders: "Purchase Orders",
     changeOrders: "Change Orders",
@@ -8053,6 +8418,7 @@ function currentCrmRecord() {
     sentProposalVersionId: state.sentProposalVersionId || "",
     schedule: state.schedule,
     selections: state.selections,
+    kitchenDesign: normalizeKitchenDesign(state.kitchenDesign),
     contract: state.contract,
     purchaseOrders: normalizePurchaseOrders(state.purchaseOrders),
     changeOrders: normalizeChangeOrders(state.changeOrders),
@@ -8098,6 +8464,7 @@ function applyCrmRecord(record) {
   state.crm.warranty = normalizeWarranty(record.warranty);
   state.schedule = normalizeSchedule(record.schedule);
   state.selections = createSelectionItems(record.selections?.length ? record.selections : selectionTemplate);
+  state.kitchenDesign = normalizeKitchenDesign(record.kitchenDesign, record);
   state.purchaseOrders = normalizePurchaseOrders(record.purchaseOrders);
   state.changeOrders = normalizeChangeOrders(record.changeOrders);
   state.selectedPurchaseOrderId = "";
@@ -8201,6 +8568,13 @@ function newCrmLead() {
     dayPopupDate: "",
   };
   state.selections = createSelectionItems();
+  state.kitchenDesign = normalizeKitchenDesign({}, {
+    projectName: els.projectName.value,
+    customerName: els.customerName.value,
+    projectType: els.projectType.value,
+    projectAddress: els.crmProjectAddress.value,
+    salesperson: els.crmSalesperson.value,
+  });
   state.purchaseOrders = [];
   state.changeOrders = [];
   state.selectedPurchaseOrderId = "";
@@ -9381,6 +9755,9 @@ async function init() {
     "selectionSearch",
     "selectionCategoryFilter",
     "selectionsBody",
+    "kitchenDesignSummary",
+    "kitchenDesignSections",
+    "printKitchenDesignBtn",
     "allowanceTotal",
     "allowanceActualTotal",
     "allowanceVarianceTotal",
@@ -9545,6 +9922,10 @@ async function init() {
       handleSelectionEdit(event);
       return;
     }
+    if (event.target.closest("[data-kitchen-field]")) {
+      handleKitchenDesignEdit(event);
+      return;
+    }
     if (event.target.closest("[data-project-task]")) {
       return;
     }
@@ -9660,6 +10041,10 @@ async function init() {
     }
     if (event.target.closest("[data-selection]")) {
       handleSelectionEdit(event);
+      return;
+    }
+    if (event.target.closest("[data-kitchen-field]")) {
+      handleKitchenDesignEdit(event);
       return;
     }
     if (event.target.closest("[data-project-task]")) {
@@ -10003,6 +10388,10 @@ async function init() {
       state.activeSelectionCategory = selectionCategoryButton.dataset.selectionCategory;
       els.selectionCategoryFilter.value = state.activeSelectionCategory;
       renderSelections();
+      return;
+    }
+    if (event.target === els.printKitchenDesignBtn) {
+      printKitchenDesign();
       return;
     }
     const calendarDate = event.target.closest("[data-calendar-date]");
